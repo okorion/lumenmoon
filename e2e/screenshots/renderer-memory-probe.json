@@ -1,0 +1,86 @@
+{
+  "measurement": "Playwright headless Edge WebGL2 on the Vite development server; Three.js GPU resource counters only, not JavaScript heap or a physical-device benchmark",
+  "cycles": 8,
+  "fixture": "six X chunks with cube, stair, and light blocks",
+  "browserErrors": {
+    "console": [],
+    "page": 0,
+    "failedRequests": 0,
+    "http": 0
+  },
+  "samples": [
+    {
+      "cycle": 1,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 2,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 3,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 4,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 5,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 6,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 7,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    },
+    {
+      "cycle": 8,
+      "geometries": 3,
+      "textures": 1,
+      "sceneObjectCount": 21,
+      "activeChunks": 3,
+      "drawCalls": 3,
+      "visibleBlocks": 9
+    }
+  ],
+  "disposed": true
+}
