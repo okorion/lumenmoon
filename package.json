@@ -1,5 +1,17 @@
 {
-  "name": "one-more-block",
+  "name": "lumenmorn",
+  "description": "루멘문: 가벼운 비동기 1인칭 공동 복셀 건축 게임",
+  "keywords": [
+    "voxel",
+    "web",
+    "game",
+    "three.js",
+    "supabase",
+    "multiplayer",
+    "korean"
+  ],
+  "author": "Lumenmorn",
+  "homepage": "https://github.com/okorion/lumenmorn",
   "private": true,
   "version": "0.1.0",
   "type": "module",

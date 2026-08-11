@@ -1,0 +1,7 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="루멘문 아이콘">
+  <rect width="192" height="192" rx="28" fill="#101a2c"/>
+  <rect x="20" y="24" width="152" height="144" rx="16" fill="#172a4f"/>
+  <path d="M58 46h76v18H58zM58 74h52v16H58zM58 102h76v16H58zM58 130h54v16H58z" fill="#81c8ff"/>
+  <path d="M150 58 140 48 109 80l-12 0 31-32H106v-18h44v18Z" fill="#9ee7ff"/>
+</svg>
+

@@ -1,0 +1,26 @@
+﻿{
+  "name": "루멘문",
+  "short_name": "루멘문",
+  "description": "사람들이 함께 한 칸씩 이어 만드는 가벼운 비동기 1인칭 복셀 건축 게임",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0c1222",
+  "theme_color": "#101a2c",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
+
