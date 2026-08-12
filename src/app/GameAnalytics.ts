@@ -187,10 +187,17 @@ export class GameAnalytics {
       if (!this.session || !this.controller.isEnabled() || !publicId) return;
       this.intervalCreators.add(publicId);
       this.session.setDistinctOtherCreatorsSeen(this.intervalCreators.size);
-      this.session.increment("creator_card_view_count");
       void this.session.reachMilestone("first_other_creator_seen");
     } catch {
       // The public ID is held only in this volatile set and never transmitted.
+    }
+  }
+
+  creatorDetailsOpened(): void {
+    try {
+      this.session?.increment("creator_card_view_count");
+    } catch {
+      // Explicit detail views are best-effort and never gate creator UI.
     }
   }
 

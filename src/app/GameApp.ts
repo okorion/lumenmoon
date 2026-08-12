@@ -316,6 +316,10 @@ export class GameApp {
     this.ui.bindOwnerHighlight((publicId) => {
       this.highlightMissionCreator(publicId);
     });
+    this.ui.bindOwnerDetailsOpen(() => {
+      this.analytics.markInput();
+      this.analytics.creatorDetailsOpened();
+    });
     this.ui.bindOwnerFind((publicId, canonicalContributionId) => {
       this.focusMissionCreator(publicId, canonicalContributionId);
     });
@@ -338,6 +342,7 @@ export class GameApp {
       this.ui.setCompletionCinematicActive(false);
     });
 
+    this.ui.setPlayerProfile(this.playerOwner);
     this.ui.setRepositoryMode(repositoryMode, this.playerOwner.publicId);
     if (storageWarning) {
       this.ui.setSaveState("이번 접속만 저장", "warning");
@@ -561,8 +566,15 @@ export class GameApp {
     const interactionPaused =
       this.ui.isMissionArchiveOpen ||
       this.ui.isAnalyticsSettingsOpen ||
+      this.ui.isWorldPanelExpanded ||
+      this.ui.isOwnerCardExpanded ||
+      this.ui.isMissionPanelExpanded ||
+      this.ui.isPaletteExpanded ||
       this.renderer.isMissionCinematicActive ||
       this.missionContributionPending;
+    if (interactionPaused) {
+      this.input.resetTransientState();
+    }
     const input =
       this.controlsActive && !interactionPaused
         ? queuedInput
@@ -646,6 +658,12 @@ export class GameApp {
   }
 
   private updateTargetUi(hit: PickResult | null): void {
+    // 제작자 상세를 읽는 동안에는 열 당시의 블록 snapshot을 고정한다.
+    // 닫힌 다음 프레임부터 현재 raycast 결과로 다시 동기화한다.
+    if (this.ui.isOwnerCardExpanded) {
+      this.renderer.showPlacementPreview(null, false);
+      return;
+    }
     if (!hit) {
       this.renderer.showPlacementPreview(null, false);
       this.analyticsCreatorCardKey = "";
@@ -2764,6 +2782,7 @@ export class GameApp {
       !this.stopped &&
       !isTouchLayout() &&
       !this.ui.isAnalyticsSettingsOpen &&
+      !this.ui.isOwnerCardExpanded &&
       !this.ui.isRecoveryNoticeVisible
     ) {
       this.ui.showPointerLockPrompt();

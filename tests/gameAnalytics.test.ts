@@ -276,4 +276,60 @@ describe("GameAnalytics consent boundary", () => {
     analytics.checkpoint(false);
     expect(capture).not.toHaveBeenCalled();
   });
+
+  it("조준은 제작자 발견만 기록하고 명시적인 상세 열기만 카드 조회로 센다", async () => {
+    const capture = vi.fn(
+      (eventName: string, properties: Record<string, unknown>) => {
+        void eventName;
+        void properties;
+      },
+    );
+    const client = postHogClient(capture);
+    const analytics = GameAnalytics.create({
+      config: analyticsConfig(),
+      hostname: "game.example",
+      webdriver: false,
+      localStorage: storageWith("allowed"),
+      device: {
+        viewportWidth: 390,
+        viewportHeight: 844,
+        touchPoints: 5,
+      },
+      loader: vi.fn(async () => client),
+    });
+    await vi.waitFor(() => expect(client.init).toHaveBeenCalledTimes(1));
+    analytics.worldControllable({
+      progress_stage: "mission_contributor",
+      input_mode: "touch",
+      orientation: "portrait",
+      acquisition: "direct",
+      world_ready_ms_bucket: "under_1s",
+      renderer_tier_bucket: "low",
+    });
+    await vi.waitFor(() =>
+      expect(capture).toHaveBeenCalledWith(
+        "game_session_started",
+        expect.any(Object),
+      ),
+    );
+    capture.mockClear();
+
+    analytics.otherCreatorSeen("#VIEW");
+    analytics.checkpoint(false);
+    analytics.creatorDetailsOpened();
+    analytics.checkpoint(false);
+
+    const summaries = capture.mock.calls.filter(
+      ([eventName]) => eventName === "game_session_summary",
+    );
+    expect(summaries).toHaveLength(2);
+    expect(summaries[0]?.[1]).toMatchObject({
+      creator_card_view_count: 0,
+      distinct_other_creators_seen_bucket: "1",
+    });
+    expect(summaries[1]?.[1]).toMatchObject({
+      creator_card_view_count: 1,
+      distinct_other_creators_seen_bucket: "0",
+    });
+  });
 });
