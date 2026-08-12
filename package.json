@@ -1,6 +1,6 @@
 {
   "name": "lumenmoon",
-  "description": "이전 플레이어의 결과를 발견하고 함께 별빛 관문을 완성하는 비동기 1인칭 복셀 건축 게임",
+  "description": "자유롭게 내 블록을 남기거나 다른 사람과 별빛 관문을 완성하는 1인칭 복셀 건축 게임",
   "keywords": [
     "voxel",
     "web",
@@ -8,7 +8,7 @@
     "three.js",
     "supabase",
     "multiplayer",
-    "asynchronous-building",
+    "collaborative-building",
     "webgl",
     "korean"
   ],
@@ -19,7 +19,7 @@
     "url": "git+https://github.com/okorion/lumenmoon.git"
   },
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "engines": {
     "node": ">=22 <26"
   },
@@ -45,6 +45,7 @@
     "three": "0.185.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "10.0.1",
     "@playwright/test": "^1.62.1",
     "@types/node": "26.2.0",

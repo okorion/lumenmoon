@@ -35,7 +35,7 @@ export default defineConfig({
     timeout: 60_000,
     env: {
       ...process.env,
-      VITE_REPOSITORY_MODE: "online",
+      VITE_REPOSITORY_MODE: process.env.E2E_REPOSITORY_MODE ?? "online",
       VITE_SUPABASE_URL: supabaseUrl,
       VITE_SUPABASE_ANON_KEY: supabaseAnonKey,
       VITE_SUPABASE_WORLD_ID: "00000000-0000-4000-8000-000000000001",

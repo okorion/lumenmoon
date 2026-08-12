@@ -29,6 +29,36 @@ export interface InputElements {
 
 export type UtilityAction = "manual-production" | "reset-bay";
 
+const KEYBOARD_LOOK_DELTA = 0.035;
+const INTERACTIVE_KEYBOARD_TARGET = [
+  "a[href]",
+  "area[href]",
+  "audio[controls]",
+  "button",
+  "dialog",
+  "input",
+  "select",
+  "summary",
+  "textarea",
+  "video[controls]",
+  "[contenteditable]:not([contenteditable='false'])",
+  "[role='button']",
+  "[role='checkbox']",
+  "[role='combobox']",
+  "[role='dialog']",
+  "[role='alertdialog']",
+  "[role='link']",
+  "[role='menuitem']",
+  "[role='option']",
+  "[role='radio']",
+  "[role='slider']",
+  "[role='spinbutton']",
+  "[role='switch']",
+  "[role='tab']",
+  "[role='textbox']",
+  "[tabindex]",
+].join(",");
+
 export class GameInput {
   private readonly pressedKeys = new Set<string>();
   private mobileMoveX = 0;
@@ -39,6 +69,7 @@ export class GameInput {
   private placeQueued = false;
   private removeQueued = false;
   private removeHeld = false;
+  private keyboardRemoveHeld = false;
   private rotateQueued = false;
   private manualProductionQueued = false;
   private resetBayQueued = false;
@@ -48,6 +79,7 @@ export class GameInput {
   private lookPointer: number | null = null;
   private lastLookX = 0;
   private lastLookY = 0;
+  private wantsPointerLock = false;
 
   constructor(
     private readonly elements: InputElements,
@@ -65,9 +97,30 @@ export class GameInput {
       return;
     }
 
+    this.wantsPointerLock = true;
     const result = this.elements.canvas.requestPointerLock();
     if (result instanceof Promise) {
-      void result.catch(() => this.onPointerLockChange(false));
+      void result.catch(() => {
+        this.wantsPointerLock = false;
+        this.onPointerLockChange(false);
+      });
+    }
+  }
+
+  /**
+   * Releases every active control before showing a clickable recovery surface.
+   * Pointer Lock must be exited explicitly; clearing queued input alone leaves
+   * the cursor captured by the canvas on desktop browsers.
+   */
+  release(): void {
+    this.wantsPointerLock = false;
+    this.resetTransientState();
+    if (this.touchMode) {
+      this.onPointerLockChange(false);
+      return;
+    }
+    if (document.pointerLockElement === this.elements.canvas) {
+      document.exitPointerLock();
     }
   }
 
@@ -78,16 +131,22 @@ export class GameInput {
     const keyMoveForward =
       Number(this.pressedKeys.has("KeyW") || this.pressedKeys.has("ArrowUp")) -
       Number(this.pressedKeys.has("KeyS") || this.pressedKeys.has("ArrowDown"));
+    const keyboardLookX =
+      Number(this.pressedKeys.has("KeyL")) -
+      Number(this.pressedKeys.has("KeyJ"));
+    const keyboardLookY =
+      Number(this.pressedKeys.has("KeyK")) -
+      Number(this.pressedKeys.has("KeyU"));
 
     const frame: InputFrame = {
       moveX: clamp(keyMoveX + this.mobileMoveX, -1, 1),
       moveForward: clamp(keyMoveForward + this.mobileMoveForward, -1, 1),
-      lookX: this.lookX,
-      lookY: this.lookY,
+      lookX: this.lookX + keyboardLookX * KEYBOARD_LOOK_DELTA,
+      lookY: this.lookY + keyboardLookY * KEYBOARD_LOOK_DELTA,
       jump: this.jumpQueued,
       place: this.placeQueued,
       remove: this.removeQueued,
-      removeHeld: this.removeHeld,
+      removeHeld: this.removeHeld || this.keyboardRemoveHeld,
       rotate: this.rotateQueued,
       manualProduction: this.manualProductionQueued,
       resetBay: this.resetBayQueued,
@@ -123,6 +182,7 @@ export class GameInput {
     this.placeQueued = false;
     this.removeQueued = false;
     this.removeHeld = false;
+    this.keyboardRemoveHeld = false;
     this.rotateQueued = false;
     this.manualProductionQueued = false;
     this.resetBayQueued = false;
@@ -137,9 +197,27 @@ export class GameInput {
 
   private bindKeyboard(): void {
     window.addEventListener("keydown", (event) => {
+      if (
+        event.isComposing ||
+        isInteractiveKeyboardTarget(event.target, this.elements.canvas)
+      ) {
+        return;
+      }
+
       this.pressedKeys.add(event.code);
       if (event.code === "Space" && !event.repeat) {
         this.jumpQueued = true;
+        event.preventDefault();
+      }
+      if (event.code === "Enter" && !event.repeat) {
+        this.placeQueued = true;
+        event.preventDefault();
+      }
+      if (event.code === "Delete") {
+        if (!event.repeat) {
+          this.removeQueued = true;
+        }
+        this.keyboardRemoveHeld = true;
         event.preventDefault();
       }
       if (event.code === "KeyR" && !event.repeat) {
@@ -161,6 +239,9 @@ export class GameInput {
     });
     window.addEventListener("keyup", (event) => {
       this.pressedKeys.delete(event.code);
+      if (event.code === "Delete") {
+        this.keyboardRemoveHeld = false;
+      }
     });
     window.addEventListener("blur", () => this.resetTransientState());
     window.addEventListener("orientationchange", () =>
@@ -205,12 +286,19 @@ export class GameInput {
       this.lookY += event.movementY * 0.0021;
     });
     document.addEventListener("pointerlockchange", () => {
-      if (document.pointerLockElement !== this.elements.canvas) {
+      const locked = document.pointerLockElement === this.elements.canvas;
+      // requestPointerLock 승인이 RPC 실패보다 늦게 도착해도 복구 화면을
+      // 다시 잠그지 않는다.
+      if (locked && !this.wantsPointerLock) {
+        document.exitPointerLock();
+        this.onPointerLockChange(false);
+        return;
+      }
+      if (!locked) {
+        this.wantsPointerLock = false;
         this.resetTransientState();
       }
-      this.onPointerLockChange(
-        document.pointerLockElement === this.elements.canvas,
-      );
+      this.onPointerLockChange(locked);
     });
   }
 
@@ -314,10 +402,20 @@ export class GameInput {
 }
 
 function bindAction(element: HTMLElement, action: () => void): void {
+  let pointerActionPending = false;
   element.addEventListener("pointerdown", (event) => {
+    pointerActionPending = true;
     action();
     event.preventDefault();
     event.stopPropagation();
+  });
+  element.addEventListener("click", (event) => {
+    if (pointerActionPending && event.detail !== 0) {
+      pointerActionPending = false;
+      return;
+    }
+    pointerActionPending = false;
+    action();
   });
 }
 
@@ -326,7 +424,9 @@ function bindHoldAction(
   start: () => void,
   end: () => void,
 ): void {
+  let pointerActionPending = false;
   element.addEventListener("pointerdown", (event) => {
+    pointerActionPending = true;
     element.setPointerCapture(event.pointerId);
     start();
     event.preventDefault();
@@ -335,6 +435,32 @@ function bindHoldAction(
   element.addEventListener("pointerup", end);
   element.addEventListener("pointercancel", end);
   element.addEventListener("lostpointercapture", end);
+  element.addEventListener("click", (event) => {
+    if (pointerActionPending && event.detail !== 0) {
+      pointerActionPending = false;
+      return;
+    }
+    pointerActionPending = false;
+    start();
+    end();
+  });
+}
+
+function isInteractiveKeyboardTarget(
+  target: EventTarget | null,
+  gameCanvas: HTMLCanvasElement,
+): boolean {
+  if (target === null || target === gameCanvas) {
+    return false;
+  }
+
+  const candidate = target as EventTarget & {
+    closest?: (selectors: string) => Element | null;
+  };
+  return (
+    typeof candidate.closest === "function" &&
+    candidate.closest(INTERACTIVE_KEYBOARD_TARGET) !== null
+  );
 }
 
 function releaseCapturedPointer(
