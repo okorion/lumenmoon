@@ -13,7 +13,7 @@ describe("공개 메타데이터", () => {
     );
     expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
     expect(html).toContain(
-      'content="https://lumenmoon.vercel.app/og/lumenmoon-og.jpg"',
+      'content="https://lumenmoon.vercel.app/og/starlight-gate-complete-v1.jpg"',
     );
 
     const structuredData = html.match(
@@ -59,8 +59,8 @@ describe("공개 메타데이터", () => {
 
   it("README와 공유 메타데이터가 참조하는 이미지가 비어 있지 않다", async () => {
     const assets = [
-      "docs/assets/lumenmoon-hero.jpg",
-      "public/og/lumenmoon-og.jpg",
+      "docs/assets/starlight-gate-complete-v1.webp",
+      "public/og/starlight-gate-complete-v1.jpg",
       "public/screenshots/lumenmoon-desktop.jpg",
       "public/screenshots/lumenmoon-mobile.jpg",
       "public/icons/icon-192.png",
