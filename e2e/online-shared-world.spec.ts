@@ -144,91 +144,69 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-844x390.png"),
       fullPage: true,
     });
-    await verifyCreatorDiscovery(bPage, actorA.bootstrap);
-    await assertMobileLayout(bPage);
     await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-844x390.png"),
       fullPage: true,
     });
 
-    const bStorageState = await bContext.storageState();
-    const portraitContext = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const portraitPage = await portraitContext.newPage();
-    const portraitErrors = observePageErrors(portraitPage);
-    await openPlayableWorld(portraitPage);
-    await expectOnboardingHud(portraitPage, 2);
-    await assertProfileStatusComposition(portraitPage, actorB.bootstrap);
-    await assertMinimalMobileHud(portraitPage);
-    await assertMobileLayout(portraitPage);
-    await hideDevelopmentPerformanceHud(portraitPage);
+    // 같은 모바일 문서를 회전·축소하며 검사한다. 각 크기마다 WebGL 월드를
+    // 다시 부팅하면 저성능 CI에서 레이아웃 검증보다 초기화 비용이 커진다.
+    await setMobileViewport(bPage, 390, 844);
+    await expectOnboardingHud(bPage, 2);
+    await assertProfileStatusComposition(bPage, actorB.bootstrap);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await hideDevelopmentPerformanceHud(bPage);
     await exerciseWorldPanelDisclosure(
-      portraitPage,
+      bPage,
       "profile-expanded-mobile-390x844.png",
     );
-    await exercisePaletteDisclosure(portraitPage);
-    await exerciseMissionPanelDisclosure(portraitPage);
-    await portraitPage.screenshot({
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
+    await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-390x844.png"),
       fullPage: true,
     });
-    await verifyCreatorDiscovery(portraitPage, actorA.bootstrap);
-    await assertMobileLayout(portraitPage);
-    await portraitPage.screenshot({
+    await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-390x844.png"),
       fullPage: true,
     });
-    await portraitContext.close();
 
-    const shortPortraitContext = await browser.newContext({
-      viewport: { width: 390, height: 667 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const shortPortraitPage = await shortPortraitContext.newPage();
-    const shortPortraitErrors = observePageErrors(shortPortraitPage);
-    await openPlayableWorld(shortPortraitPage);
-    await expectOnboardingHud(shortPortraitPage, 2);
-    await assertMinimalMobileHud(shortPortraitPage);
-    await assertMobileLayout(shortPortraitPage);
-    await exerciseWorldPanelDisclosure(shortPortraitPage);
-    await exercisePaletteDisclosure(shortPortraitPage);
-    await exerciseMissionPanelDisclosure(shortPortraitPage);
-    await verifyCreatorDiscovery(shortPortraitPage, actorA.bootstrap);
-    await assertMobileLayout(shortPortraitPage);
-    await shortPortraitContext.close();
+    await setMobileViewport(bPage, 390, 667);
+    await expectOnboardingHud(bPage, 2);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await exerciseWorldPanelDisclosure(bPage);
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
 
-    const compactPortraitContext = await browser.newContext({
-      viewport: { width: 360, height: 640 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const compactPortraitPage = await compactPortraitContext.newPage();
-    const compactPortraitErrors = observePageErrors(compactPortraitPage);
-    await openPlayableWorld(compactPortraitPage);
-    await expectOnboardingHud(compactPortraitPage, 2);
-    await assertMinimalMobileHud(compactPortraitPage);
-    await assertMobileLayout(compactPortraitPage);
-    await exerciseWorldPanelDisclosure(compactPortraitPage);
-    await exercisePaletteDisclosure(compactPortraitPage);
-    await exerciseMissionPanelDisclosure(compactPortraitPage);
-    await verifyCreatorDiscovery(compactPortraitPage, actorA.bootstrap);
-    await assertMobileLayout(compactPortraitPage);
-    await hideDevelopmentPerformanceHud(compactPortraitPage);
-    await compactPortraitPage.screenshot({
+    await setMobileViewport(bPage, 360, 640);
+    await expectOnboardingHud(bPage, 2);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await exerciseWorldPanelDisclosure(bPage);
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
+    await hideDevelopmentPerformanceHud(bPage);
+    await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-360x640.png"),
       fullPage: true,
     });
-    await compactPortraitContext.close();
+
+    // 각 크기의 중립 HUD 캡처를 먼저 고정한 뒤 제작자 상세을 검증한다.
+    // 작은 화면부터 가로로 돌아오므로 다음 기록관 흐름도 844×390을 유지한다.
+    for (const [width, height] of [
+      [360, 640],
+      [390, 667],
+      [390, 844],
+      [844, 390],
+    ] as const) {
+      await setMobileViewport(bPage, width, height);
+      await verifyCreatorDiscovery(bPage, actorA.bootstrap);
+      await assertMobileLayout(bPage);
+    }
+
+    const bStorageState = await bContext.storageState();
 
     const desktopContext = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -408,10 +386,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
 
     for (const [label, errors] of [
       ["A", aErrors],
-      ["B", bErrors],
-      ["portrait B", portraitErrors],
-      ["short portrait B", shortPortraitErrors],
-      ["compact portrait B", compactPortraitErrors],
+      ["B mobile", bErrors],
       ["desktop B", desktopErrors],
       ["reconnected A", reconnectedErrors],
     ] as const) {
@@ -1061,6 +1036,28 @@ async function exerciseOrientationDisclosureReset(page: Page): Promise<void> {
   await assertMinimalMobileHud(page);
   await assertMobileLayout(page);
   await page.setViewportSize({ width: 844, height: 390 });
+}
+
+async function setMobileViewport(
+  page: Page,
+  width: number,
+  height: number,
+): Promise<void> {
+  await page.setViewportSize({ width, height });
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        portrait: matchMedia("(orientation: portrait)").matches,
+      })),
+    )
+    .toEqual({ width, height, portrait: height > width });
+  await expect(page.locator("#fatal-overlay")).toBeHidden();
+  await expect(page.locator(".world-panel")).not.toHaveClass(/is-expanded/u);
+  await expect(page.locator("#mission-panel")).toHaveClass(/is-collapsed/u);
+  await expect(page.locator("#palette-row")).toBeHidden();
+  await expect(page.locator("#owner-card")).toBeHidden();
 }
 
 async function assertProfileStatusComposition(
