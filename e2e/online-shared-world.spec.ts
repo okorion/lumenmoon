@@ -54,6 +54,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test("A 온보딩부터 B의 제작자 확인, 재접속, 다음 미션까지 이어진다", async ({
     browser,
   }) => {
+    test.setTimeout(480_000);
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
     await waitForSupabaseReady(requiredAnonKey());
 
@@ -450,10 +451,14 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       "시작 지점과 광장으로 가는 길은 비워 두고",
     );
 
-    // 슬롯 0은 중앙을 바라본다. 왼쪽+앞으로 움직여 스폰 발판과
-    // 내 자리 발판의 경계를 건너, 보호 통로 밖의 넓은 +X 바닥에 선다.
-    await moveMobilePlayer(context, page, { x: -0.25, y: -0.18 }, 850, 31);
-    await aimMobileCameraAtGround(context, page);
+    // 슬롯 0의 발판 위에서 대각선으로 이동하되, 고정 시간에 기대지 않고
+    // 실제 배치 가능 판정이 바뀌는 순간 입력을 놓아 CI 프레임 차이를 흡수한다.
+    await moveMobilePlayerUntilPlaceable(
+      context,
+      page,
+      { x: -0.25, y: -0.18 },
+      31,
+    );
     await page.locator("#place-button").click();
     await expect(page.locator("#build-inventory-count")).toHaveText("29");
     const placed = await actor.repository.getFreeModeOverview(WORLD_ID);
@@ -1590,11 +1595,10 @@ async function aimMobileCameraAtGround(
   }
 }
 
-async function moveMobilePlayer(
+async function moveMobilePlayerUntilPlaceable(
   context: BrowserContext,
   page: Page,
   direction: { x: number; y: number },
-  durationMs: number,
   pointerId: number,
 ): Promise<void> {
   const joystick = await requiredBox(page, "#joystick");
@@ -1623,7 +1627,12 @@ async function moveMobilePlayer(
         page.locator("#joystick-knob").evaluate((element) => element.style.transform),
       )
       .not.toBe("translate(0px, 0px)");
-    await page.waitForTimeout(durationMs);
+    await expect
+      .poll(() => page.locator("#action-hint").textContent(), {
+        timeout: 10_000,
+        intervals: [100, 100, 200, 200, 400],
+      })
+      .toContain("놓을 수 있어요");
   } finally {
     await session.send("Input.dispatchTouchEvent", {
       type: "touchEnd",
