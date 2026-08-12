@@ -56,6 +56,7 @@ import {
   validateCommitFreeModeActions,
   validateCommitWorldActions,
 } from "./worldActionValidation";
+import { withAuthSessionLock } from "./authSessionLock";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -73,6 +74,8 @@ export interface SupabaseRepositoryOptions {
   worldId: string;
   /** 테스트에서만 짧게 조정한다. 운영 기본값은 12초다. */
   requestTimeoutMs?: number;
+  /** 같은 Supabase auth 저장소를 쓰는 탭의 최초 익명 가입을 직렬화한다. */
+  authLockName?: string;
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 12_000;
@@ -84,14 +87,24 @@ export function createSupabaseRepository(
   anonKey: string,
   options: SupabaseRepositoryOptions,
 ): SupabaseRepository {
+  const authStorageKey = supabaseAuthStorageKey(url);
   const client = createClient(url, anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: false,
+      storageKey: authStorageKey,
     },
   });
-  return new SupabaseRepository(client, options);
+  return new SupabaseRepository(client, {
+    ...options,
+    authLockName: `lumenmoon:auth-bootstrap:${authStorageKey}`,
+  });
+}
+
+function supabaseAuthStorageKey(url: string): string {
+  const hostname = new URL(url).hostname;
+  return `sb-${hostname.split(".")[0]}-auth-token`;
 }
 
 /**
@@ -104,6 +117,7 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
   private readonly client: SupabaseClient;
   private readonly worldId: string;
   private readonly requestTimeoutMs: number;
+  private readonly authLockName: string;
   private authenticationPromise: Promise<User> | null = null;
 
   constructor(client: SupabaseClient, options: SupabaseRepositoryOptions) {
@@ -122,6 +136,8 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
     this.client = client;
     this.worldId = options.worldId;
     this.requestTimeoutMs = requestTimeoutMs;
+    this.authLockName =
+      options.authLockName ?? "lumenmoon:auth-bootstrap:default";
   }
 
   async getPlayerIdentity(worldId: string): Promise<PlayerIdentityResult> {
@@ -521,10 +537,54 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
 
   private async authenticate(): Promise<User> {
     try {
-      return await this.authenticateOnce();
+      return await this.authenticateCoordinated();
     } catch (error) {
       throw normalizeRequestError(error);
     }
+  }
+
+  private async authenticateCoordinated(): Promise<User> {
+    const existing = await this.readAnonymousSession();
+    if (existing) {
+      return existing;
+    }
+
+    return withAuthSessionLock(
+      this.authLockName,
+      this.requestTimeoutMs,
+      async () => {
+        // This second read and the signup are one cross-tab critical section,
+        // so a waiting tab reuses the account created by the winner.
+        const created = await this.authenticateOnce();
+        const persisted = await this.readAnonymousSession();
+        if (!persisted) {
+          throw new RepositoryRequestError(
+            "익명 계정 저장을 확인하지 못했습니다. 다시 시도해 주세요.",
+            { code: "auth-session-missing", retryable: true },
+          );
+        }
+        if (persisted.id !== created.id) {
+          throw new RepositoryRequestError(
+            "다른 탭에서 익명 계정이 바뀌었습니다. 페이지를 새로고침해 주세요.",
+            { code: "auth-session-conflict", retryable: false },
+          );
+        }
+        return persisted;
+      },
+    );
+  }
+
+  private async readAnonymousSession(): Promise<User | null> {
+    const current = await withRequestTimeout(
+      this.client.auth.getSession(),
+      this.requestTimeoutMs,
+    );
+    if (current.error) {
+      throw repositoryError("익명 세션을 확인하지 못했습니다.", current.error);
+    }
+    return current.data.session?.user
+      ? assertAnonymousUser(current.data.session.user)
+      : null;
   }
 
   private async authenticateOnce(): Promise<User> {

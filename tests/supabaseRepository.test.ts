@@ -82,6 +82,34 @@ function fakeClient(options: FakeClientOptions = {}) {
   };
 }
 
+class SharedBrowserStorage implements Storage {
+  private readonly values = new Map<string, string>();
+
+  get length(): number {
+    return this.values.size;
+  }
+
+  clear(): void {
+    this.values.clear();
+  }
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  key(index: number): string | null {
+    return Array.from(this.values.keys())[index] ?? null;
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+}
+
 describe("SupabaseRepository", () => {
   it("모드 선택 전 공개 프로필만 준비한다", async () => {
     const { client, calls } = fakeClient({
@@ -113,6 +141,111 @@ describe("SupabaseRepository", () => {
     expect(calls).toEqual([
       { name: "get_player_identity", args: { p_world_id: WORLD_ID } },
     ]);
+  });
+
+  it("같은 브라우저 저장소의 두 인스턴스가 최초 익명 계정을 하나만 만든다", async () => {
+    const storage = new SharedBrowserStorage();
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("localStorage", storage);
+
+    const shared: {
+      user: { id: string; is_anonymous: true } | null;
+      signupCount: number;
+    } = { user: null, signupCount: 0 };
+    const makeClient = (): SupabaseClient => {
+      const auth = {
+        getSession: vi.fn(async () => ({
+          data: {
+            session: shared.user ? { user: shared.user } : null,
+          },
+          error: null,
+        })),
+        signInAnonymously: vi.fn(async () => {
+          const sequence = ++shared.signupCount;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          const user = {
+            id: `internal-auth-uid-${sequence}`,
+            is_anonymous: true as const,
+          };
+          shared.user = user;
+          return { data: { user, session: { user } }, error: null };
+        }),
+      };
+      const rpc = vi.fn(async () => ({
+        data: {
+          profile: {
+            public_tag: "#A2B3",
+            nickname: "고요한 여우",
+            emblem: "✦",
+          },
+          server_now: SERVER_NOW,
+        },
+        error: null,
+      }));
+      return { auth, rpc } as unknown as SupabaseClient;
+    };
+
+    try {
+      const first = new SupabaseRepository(makeClient(), {
+        worldId: WORLD_ID,
+      });
+      const second = new SupabaseRepository(makeClient(), {
+        worldId: WORLD_ID,
+      });
+
+      const identities = await Promise.all([
+        first.getPlayerIdentity(WORLD_ID),
+        second.getPlayerIdentity(WORLD_ID),
+      ]);
+
+      expect(shared.signupCount).toBe(1);
+      expect(identities.map(({ player }) => player.publicId)).toEqual([
+        "#A2B3",
+        "#A2B3",
+      ]);
+      expect(JSON.stringify(identities)).not.toContain("internal-auth-uid");
+      expect(
+        Array.from({ length: storage.length }, (_, index) => storage.key(index)),
+      ).not.toContainEqual(expect.stringContaining(":bakery:"));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("교차 탭 잠금 수단이 없는 브라우저에서는 가입을 실행하지 않는다", async () => {
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("localStorage", undefined);
+    const signInAnonymously = vi.fn();
+    const client = {
+      auth: {
+        getSession: vi.fn(async () => ({
+          data: { session: null },
+          error: null,
+        })),
+        signInAnonymously,
+      },
+      rpc: vi.fn(),
+    } as unknown as SupabaseClient;
+
+    try {
+      const repository = new SupabaseRepository(client, {
+        worldId: WORLD_ID,
+      });
+      const error = await repository
+        .getPlayerIdentity(WORLD_ID)
+        .catch((cause: unknown) => cause);
+
+      expect(error).toMatchObject({
+        code: "auth-coordination-unavailable",
+        retryable: false,
+      });
+      expect(signInAnonymously).not.toHaveBeenCalled();
+      expect((error as Error).message).not.toContain("internal-auth-uid");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("bootstrap 응답에서 auth UID를 제거하고 공개 신원만 반환한다", async () => {
