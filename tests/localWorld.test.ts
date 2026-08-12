@@ -4,6 +4,7 @@ import {
   prepareLocalSnapshot,
   withoutOnboardingBlocks,
 } from "../src/world/localWorld";
+import { createSeedSnapshot } from "../src/world/seed";
 
 function ownedBlock(
   id: string,
@@ -85,5 +86,79 @@ describe("로컬 월드 준비", () => {
     expect(prepared.snapshot.localState?.baySlotIndex).toBe(0);
     expect(prepared.snapshot.localState?.progress.inventory).toBe(24);
     expect(prepared.snapshot.localState?.progress.lastSettledAt).toBe(5_000);
+  });
+
+  it("결정적 시스템 맵만 갱신하고 같은 좌표의 사용자 블록은 보존한다", () => {
+    const initial = createSeedSnapshot(1_000);
+    const replaceable = initial.blocks.find(
+      ({ id }) => id === "online-ground-0-0-0",
+    )!;
+    const occupiedSystemPosition = initial.blocks.find(
+      ({ id }) => id === "online-core-orbit-0--1-3-0",
+    )!;
+    const userWinner: VoxelBlock = {
+      ...occupiedSystemPosition,
+      id: "existing-user-winner",
+      owner: LOCAL_PLAYER,
+      zone: "public",
+      colorIndex: 2,
+    };
+    const legacySnapshot = {
+      ...initial,
+      blocks: initial.blocks.map((block) => {
+        if (block.id === replaceable.id) return { ...block, colorIndex: 2 };
+        if (block.id === occupiedSystemPosition.id) return userWinner;
+        return block;
+      }),
+    };
+
+    const upgraded = prepareLocalSnapshot(legacySnapshot, 2_000);
+    expect(upgraded.changed).toBe(true);
+    expect(
+      upgraded.snapshot.blocks.find(({ id }) => id === replaceable.id)?.colorIndex,
+    ).not.toBe(2);
+    expect(upgraded.snapshot.blocks.find(({ id }) => id === userWinner.id)).toEqual(
+      userWinner,
+    );
+    expect(
+      upgraded.snapshot.blocks.some(({ id }) => id === occupiedSystemPosition.id),
+    ).toBe(false);
+
+    const stable = prepareLocalSnapshot(upgraded.snapshot, 3_000);
+    expect(stable.changed).toBe(false);
+  });
+
+  it("이전 ground 시스템 ID를 제거하고 같은 좌표를 중복 없이 최신 광장으로 이관한다", () => {
+    const initial = createSeedSnapshot(1_000);
+    const currentGround = initial.blocks.find(
+      ({ id }) => id === "online-ground-11-0-11",
+    )!;
+    const legacyGround: VoxelBlock = {
+      ...currentGround,
+      id: "ground-11-0-11",
+      colorIndex: 2,
+    };
+    const legacy = {
+      ...initial,
+      blocks: initial.blocks.map((block) =>
+        block.id === currentGround.id ? legacyGround : block,
+      ),
+    };
+
+    const upgraded = prepareLocalSnapshot(legacy, 2_000);
+    expect(upgraded.changed).toBe(true);
+    expect(upgraded.snapshot.blocks.some(({ id }) => id === legacyGround.id)).toBe(
+      false,
+    );
+    expect(
+      upgraded.snapshot.blocks.some(({ id }) => id === currentGround.id),
+    ).toBe(true);
+    expect(
+      new Set(
+        upgraded.snapshot.blocks.map(
+          ({ position }) => `${position.x},${position.y},${position.z}`,
+        ),
+      ).size,
+    ).toBe(upgraded.snapshot.blocks.length);
   });
 });

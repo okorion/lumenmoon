@@ -8,6 +8,17 @@ import {
   createStarterBaySystemBlocks,
 } from "../world/seed";
 
+const reservedStarterBaySystemBlocks = Array.from(
+  { length: STARTER_BAY_RESERVED_SLOT_COUNT },
+  (_, slotIndex) => createStarterBaySystemBlocks(slotIndex),
+).flat();
+const centralOnlineSystemBlocks = createCentralOnlineSystemBlocks();
+const allOnlineSystemBlocks = [
+  // 중앙 광장을 먼저 합성해 로컬 초기 맵과 겹치는 접근로의 재질·ID가 같다.
+  ...centralOnlineSystemBlocks,
+  ...reservedStarterBaySystemBlocks,
+];
+
 /** 서로 다른 UI 경로의 progress RPC가 겹쳐 역순 응답으로 상태를 덮지 않게 한다. */
 export class OnlineProgressGate {
   private active = false;
@@ -114,15 +125,8 @@ export function createNearbyOnlineSystemBlocks(
 ): VoxelBlock[] {
   const seenPositions = new Set<string>();
   const seenIds = new Set<string>();
-  const blocks = [
-    ...Array.from(
-      { length: STARTER_BAY_RESERVED_SLOT_COUNT },
-      (_, slotIndex) => createStarterBaySystemBlocks(slotIndex),
-    ).flat(),
-    ...createCentralOnlineSystemBlocks(),
-  ];
 
-  return blocks.flatMap((source) => {
+  return allOnlineSystemBlocks.flatMap((source) => {
     const chunk = toChunkCoordinate(source.position);
     if (
       Math.abs(chunk.x - chunkX) > radius ||
