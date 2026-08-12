@@ -52,10 +52,73 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  integration:
+    name: DB, online E2E, accessibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run local accessibility E2E
+        run: npx playwright test e2e/accessibility.spec.ts
+        env:
+          E2E_REPOSITORY_MODE: local
+
+      - name: Start and reset local Supabase
+        run: |
+          npm run db:start
+          npm run db:reset
+
+      - name: Run database tests
+        run: npm run test:db
+
+      - name: Read local public test credentials
+        shell: bash
+        run: |
+          status_json="$(npx supabase status -o json)"
+          api_url="$(jq -r '.API_URL // .api_url // empty' <<<"$status_json")"
+          anon_key="$(jq -r '.ANON_KEY // .anon_key // .PUBLISHABLE_KEY // empty' <<<"$status_json")"
+          if [[ -z "$api_url" || -z "$anon_key" ]]; then
+            echo '::error::Local Supabase public test credentials are unavailable.'
+            exit 1
+          fi
+          echo "::add-mask::$anon_key"
+          echo "SUPABASE_TEST_URL=$api_url" >> "$GITHUB_ENV"
+          echo "SUPABASE_TEST_ANON_KEY=$anon_key" >> "$GITHUB_ENV"
+
+      - name: Run anonymous HTTP integration tests
+        run: npm run test:db:client
+
+      - name: Reset online E2E fixtures
+        run: npm run db:reset
+
+      - name: Run online browser flows
+        run: npm run test:e2e:online
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx supabase stop --no-backup
+
   deploy-github-pages:
     name: Deploy to GitHub Pages
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_GITHUB_PAGES_DEPLOY == 'true'
-    needs: ci
+    needs: [ci, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -98,7 +161,7 @@ jobs:
   deploy-vercel:
     name: Deploy to Vercel
     if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_VERCEL_DEPLOY == 'true'
-    needs: ci
+    needs: [ci, integration]
     runs-on: ubuntu-latest
     permissions:
       contents: read
