@@ -39,6 +39,7 @@ import {
   cloneLocalMissionWorldState,
   expandMissionBlocks,
   getMissionTemplate,
+  missionGlowFromFilledSlots,
   selectMissionRenderWindow,
   transformMissionSlot,
   type LocalMissionWorldState,
@@ -776,7 +777,7 @@ export class GameApp {
           ? "생산시설 Lv.2 완성 · 2시간마다 1개 생산"
           : guide
             ? guidePlacementToast(guide)
-            : "한 칸을 더했어요",
+            : "블록을 놓았어요",
     );
   }
 
@@ -1890,7 +1891,7 @@ export class GameApp {
           finish,
         );
         this.ui.setCompletionCinematicActive(cinematicStarted);
-        this.ui.toast("루멘문이 완성되어 다음 층이 열렸어요");
+        this.ui.toast("별빛 관문이 완성되어 다음 층이 열렸어요");
       } else {
         this.presentMission(result.mission);
         this.ui.toast("정규 슬롯 1칸에 별빛을 보탰어요");
@@ -1986,7 +1987,10 @@ export class GameApp {
     );
     this.rescuePlayerFromMissionCollision();
     const visuals = expandedByMission.flatMap(({ mission, blocks }) =>
-      missionDisplayBlocksToVisuals(blocks, mission.stagePercent),
+      missionDisplayBlocksToVisuals(
+        blocks,
+        missionGlowFromFilledSlots(mission.filledSlots, mission.totalSlots),
+      ),
     );
     this.renderedMission = focus;
     this.renderer.setMissionVisuals({
@@ -2445,7 +2449,7 @@ export class GameApp {
         this.recordProgressMilestones(previousProgress, result.progress);
       }
       this.ui.toast(
-        guide ? guidePlacementToast(guide) : "공동 월드에 한 칸을 더했어요",
+        guide ? guidePlacementToast(guide) : "공동 월드에 블록을 놓았어요",
       );
     } catch (error) {
       this.recordCommitFailure(error);

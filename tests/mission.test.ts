@@ -7,6 +7,7 @@ import {
   expandMissionBlocks,
   expandMissionContribution,
   missionBlocksByCreator,
+  missionGlowFromFilledSlots,
   missionInstanceView,
   selectMissionRenderWindow,
   missionStageFromFilledSlots,
@@ -58,6 +59,17 @@ describe("루멘문 도메인", () => {
     [24, 100],
   ] as const)("확정 슬롯 %i개를 %i%% 단계로 판정한다", (count, stage) => {
     expect(missionStageFromFilledSlots(count)).toBe(stage);
+  });
+
+  it("첫 기여부터 5% 단위로 발광하고 완료 전에 100%를 먼저 표시하지 않는다", () => {
+    expect(
+      Array.from({ length: 25 }, (_, count) =>
+        missionGlowFromFilledSlots(count),
+      ),
+    ).toEqual([
+      0, 5, 10, 15, 20, 25, 25, 30, 35, 40, 45, 50, 50, 55, 60, 65, 70,
+      75, 75, 80, 85, 90, 95, 95, 100,
+    ]);
   });
 
   it("정규 슬롯 하나를 최대 4방향으로 펼치고 중심축 중복은 제거한다", () => {
@@ -156,7 +168,7 @@ function contributionAt(
     id: "contribution",
     blockId: "block",
     missionId: "mission",
-    missionName: "루멘문",
+    missionName: "별빛 관문",
     missionLayer: 1,
     slotIndex: 0,
     ...block,

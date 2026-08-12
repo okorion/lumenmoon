@@ -1,6 +1,6 @@
 import type { AnalyticsMilestone } from "./types";
 
-const DATABASE_NAME = "one-more-block-analytics";
+const DATABASE_NAME = "lumenmoon-analytics";
 const DATABASE_VERSION = 1;
 const STORE_NAME = "lifecycle";
 const STATE_KEY = "device";

@@ -1,6 +1,6 @@
 {
-  "name": "lumenmorn",
-  "description": "루멘문: 가벼운 비동기 1인칭 공동 복셀 건축 게임",
+  "name": "lumenmoon",
+  "description": "이전 플레이어의 결과를 발견하고 함께 별빛 관문을 완성하는 비동기 1인칭 복셀 건축 게임",
   "keywords": [
     "voxel",
     "web",
@@ -8,12 +8,21 @@
     "three.js",
     "supabase",
     "multiplayer",
+    "asynchronous-building",
+    "webgl",
     "korean"
   ],
-  "author": "Lumenmorn",
-  "homepage": "https://github.com/okorion/lumenmorn",
+  "author": "okorion",
+  "homepage": "https://lumenmoon.vercel.app/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/okorion/lumenmoon.git"
+  },
   "private": true,
   "version": "0.1.0",
+  "engines": {
+    "node": ">=22 <26"
+  },
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",

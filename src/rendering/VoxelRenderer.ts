@@ -16,7 +16,11 @@ import {
 } from "../domain/types";
 import type { VoxelWorld } from "../domain/world";
 import type { GuideCell, GuideGroup } from "../domain/starterBay";
-import type { MissionDisplayBlock } from "../domain/mission";
+import type {
+  MissionDisplayBlock,
+  MissionGlowPercent,
+  MissionStagePercent,
+} from "../domain/mission";
 
 interface CubeFace {
   normal: GridPosition;
@@ -30,7 +34,7 @@ export interface PickResult {
   mission?: MissionPickMetadata;
 }
 
-export type MissionVisualStage = 0 | 25 | 50 | 75 | 100;
+export type MissionVisualStage = MissionGlowPercent;
 
 export interface MissionPickMetadata {
   instanceId: string;
@@ -54,7 +58,7 @@ export interface MissionVisualBlock extends MissionPickMetadata {
 
 export interface MissionVisualState {
   instanceId: string;
-  stage: MissionVisualStage;
+  stage: MissionStagePercent;
   anchor: Vector3Like;
   blocks: readonly MissionVisualBlock[];
 }
@@ -218,7 +222,7 @@ export class VoxelRenderer {
   private pendingMesh: THREE.Mesh | null = null;
   private lastCenterChunk = "";
   private readonly visibleRadius: number;
-  private missionStage: MissionVisualStage = 0;
+  private missionStage: MissionStagePercent = 0;
   private highlightedMissionOwner: string | null = null;
   private currentMissionVisuals: readonly MissionVisualBlock[] = [];
   private cinematic: MissionCinematic | null = null;
@@ -749,7 +753,7 @@ export class VoxelRenderer {
 
   private buildMissionStageEffects(
     anchor: Vector3Like,
-    stage: MissionVisualStage,
+    stage: MissionStagePercent,
   ): void {
     this.disposeObjectTree(this.missionEffectRoot, true);
     this.missionEffectRoot.clear();
@@ -1347,18 +1351,8 @@ export function missionDisplayBlocksToVisuals(
 }
 
 export function missionEmissiveIntensity(stage: MissionVisualStage): number {
-  switch (stage) {
-    case 0:
-      return 0.16;
-    case 25:
-      return 0.32;
-    case 50:
-      return 0.5;
-    case 75:
-      return 0.82;
-    case 100:
-      return 1.45;
-  }
+  const normalized = stage / 100;
+  return 0.16 + Math.pow(normalized, 1.18) * 1.29;
 }
 
 const GUIDE_CUBE_GEOMETRY = new THREE.BoxGeometry(1.025, 1.025, 1.025);

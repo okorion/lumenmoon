@@ -26,11 +26,11 @@ const OLD_PLAYER: BlockOwner = {
 };
 
 describe("Local 공동 미션 저장소", () => {
-  it("활성 루멘문과 최대 3개 추천 슬롯을 읽는다", async () => {
+  it("활성 별빛 관문과 최대 3개 추천 슬롯을 읽는다", async () => {
     const { repository } = await eligibleRepository(2);
     const overview = await repository.getMissionOverview(WORLD_ID);
 
-    expect(overview.activeMission.name).toBe("루멘문");
+    expect(overview.activeMission.name).toBe("별빛 관문");
     expect(overview.activeMission.totalSlots).toBe(24);
     expect(overview.activeMission.recommendedSlotIndexes).toEqual([0, 1, 2]);
     expect(overview.activeMission.palette).toHaveLength(5);

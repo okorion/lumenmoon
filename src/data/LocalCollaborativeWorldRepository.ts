@@ -86,7 +86,7 @@ interface StoredMutation<T> {
 }
 
 const storageMutationQueues = new WeakMap<WorldRepository, Promise<void>>();
-const CROSS_TAB_MUTATION_LOCK = "one-more-block:world-repository-mutations";
+const CROSS_TAB_MUTATION_LOCK = "lumenmoon:world-repository-mutations";
 
 /**
  * 기존 IndexedDB/Memory 저장소를 공동 월드 명령 계약에 맞춘 로컬 어댑터다.

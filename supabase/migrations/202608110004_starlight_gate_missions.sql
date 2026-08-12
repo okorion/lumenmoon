@@ -123,7 +123,7 @@ insert into public.mission_templates (
   '60000000-0000-4000-8000-000000000001',
   'starlight-gate',
   1,
-  '루멘문',
+  '별빛 관문',
   24,
   array[1, 4, 6, 9, 11]::smallint[],
   7

@@ -5,6 +5,7 @@
   type VoxelBlock,
 } from "../domain/types";
 import type { AnalyticsConsentChoice } from "../analytics/types";
+import { missionGlowFromFilledSlots } from "../domain/mission";
 
 export interface BuildSelection {
   kind: BlockKind;
@@ -108,6 +109,8 @@ export class GameUI {
   private readonly startDescription: HTMLElement;
   private readonly worldMode: HTMLElement;
   private readonly storageDescription: HTMLElement;
+  private readonly worldPanel: HTMLElement;
+  private readonly worldPanelToggle: HTMLButtonElement;
   private readonly ownerCard: HTMLElement;
   private readonly ownerEmblem: HTMLElement;
   private readonly ownerName: HTMLElement;
@@ -123,6 +126,11 @@ export class GameUI {
   private readonly playerState: HTMLElement;
   private readonly toastElement: HTMLElement;
   private readonly selectedLabel: HTMLElement;
+  private readonly buildTray: HTMLElement;
+  private readonly paletteRow: HTMLElement;
+  private readonly paletteToggle: HTMLButtonElement;
+  private readonly selectedColorSwatch: HTMLElement;
+  private readonly buildInventoryCount: HTMLElement;
   private readonly fatalOverlay: HTMLElement;
   private readonly fatalTitle: HTMLElement;
   private readonly fatalMessage: HTMLElement;
@@ -142,6 +150,7 @@ export class GameUI {
   private readonly removalHold: HTMLElement;
   private readonly removalHoldBar: HTMLElement;
   private readonly missionPanel: HTMLElement;
+  private readonly missionPanelToggle: HTMLButtonElement;
   private readonly missionFloor: HTMLElement;
   private readonly missionTitle: HTMLElement;
   private readonly missionStage: HTMLElement;
@@ -203,14 +212,15 @@ export class GameUI {
       '<button id="analytics-settings-button" class="analytics-settings-button" type="button" aria-label="개인정보와 익명 통계 설정 열기" title="개인정보와 통계 설정">',
       '<span aria-hidden="true">⚙</span><i aria-hidden="true"></i></button>',
       '</header>',
-      '<aside class="world-panel glass" aria-label="현재 상태">',
+      '<aside class="world-panel glass" aria-label="인벤토리와 현재 상태">',
+      '<button id="world-panel-toggle" class="world-panel-toggle" type="button" aria-expanded="false" aria-label="인벤토리와 단축키 열기" title="인벤토리 · 단축키 (I)">⌄</button>',
       '<div class="world-status-row"><span id="save-state" class="status-dot">저장 준비</span>',
       '<span id="player-state">베이 01</span></div>',
       '<div class="progress-grid">',
-      '<span><small>재고</small><strong id="inventory-count">24</strong></span>',
-      '<span><small>거점</small><strong id="base-progress">0/16</strong></span>',
-      '<span><small>시설</small><strong id="producer-progress">0/8</strong></span>',
-      '<span><small>단계</small><strong id="producer-level">Lv.1</strong></span>',
+      '<span title="보유 블록"><i class="status-icon status-icon-block" aria-hidden="true">◆</i><small>블록</small><strong id="inventory-count">24</strong></span>',
+      '<span title="개인 거점"><i class="status-icon" aria-hidden="true">⌂</i><small>거점</small><strong id="base-progress">0/16</strong></span>',
+      '<span title="생산시설"><i class="status-icon" aria-hidden="true">⚙</i><small>시설</small><strong id="producer-progress">0/8</strong></span>',
+      '<span title="생산시설 단계"><i class="status-icon" aria-hidden="true">✦</i><small>단계</small><strong id="producer-level">Lv.1</strong></span>',
       '</div>',
       '<div class="production-status"><span id="next-automatic">자동 생산 준비 중</span>',
       '<span id="manual-remaining">수동 3회 남음</span></div>',
@@ -219,6 +229,7 @@ export class GameUI {
       '<button id="reset-bay-button" data-testid="reset-bay" type="button" title="베이 초기화 단축키 X">내 베이 다시 시작</button>',
       '</div>',
       '<div id="manual-stage" class="manual-stage" role="status" aria-live="polite" hidden></div>',
+      '<dl class="shortcut-guide" aria-label="키보드 단축키"><div><dt>건축</dt><dd>1/2/3 · Q/E · R</dd></div><div><dt>기능</dt><dd>F 생산 · X 초기화 · I 인벤토리 · M 미션</dd></div></dl>',
       '</aside>',
       '<div id="owner-card" class="owner-card glass" data-testid="owner-card" hidden>',
       '<span id="owner-emblem" class="owner-emblem">✦</span>',
@@ -233,13 +244,15 @@ export class GameUI {
       '<button id="owner-find-button" type="button">찾아가기</button>',
       '</div></div>',
       '</div>',
-      '<aside id="mission-panel" class="mission-panel glass" aria-label="공동 미션" hidden>',
-      '<div class="mission-heading"><div><small id="mission-floor">루멘문 · 1층</small>',
-      '<strong id="mission-title">루멘문</strong></div>',
-      '<span id="mission-stage" class="mission-stage">시작</span></div>',
+      '<aside id="mission-panel" class="mission-panel glass is-collapsed" aria-label="공동 미션" hidden>',
+      '<div class="mission-heading"><div><small id="mission-floor">별빛 관문 · 1층</small>',
+      '<strong id="mission-title">별빛 관문</strong></div>',
+      '<div class="mission-heading-actions"><span id="mission-stage" class="mission-stage">✦ 0%</span>',
+      '<button id="mission-panel-toggle" class="mission-panel-toggle" type="button" aria-expanded="false" aria-label="공동 미션 상세 열기" title="미션 상세">⌄</button></div></div>',
       '<div class="mission-progress" aria-label="미션 진행률"><i id="mission-progress-bar"></i></div>',
       '<div class="mission-progress-copy"><strong id="mission-progress-label">0% · 0/24</strong>',
       '<span id="mission-contribution-status">추천 위치를 선택하세요</span></div>',
+      '<div class="mission-details">',
       '<div class="mission-stats">',
       '<span><small>내 기여</small><strong id="mission-my-contribution">0</strong></span>',
       '<span><small>전체 참여자</small><strong id="mission-contributor-count">0명</strong></span>',
@@ -257,7 +270,7 @@ export class GameUI {
       '<div class="mission-panel-actions">',
       '<button id="mission-highlight-mine" type="button">내 블록 강조</button>',
       '<button id="mission-archive-button" type="button">기록관 열기</button>',
-      '</div></aside>',
+      '</div></div></aside>',
       '<div id="highlight-banner" class="highlight-banner glass" role="status" hidden>',
       '<span id="highlight-label">제작자 블록을 강조하고 있어요</span>',
       '<button id="highlight-find-button" class="highlight-find" type="button" hidden>찾아가기</button>',
@@ -272,8 +285,10 @@ export class GameUI {
       '<button type="button" class="tool-button" data-kind="stair" aria-label="계단">◩</button>',
       '<button type="button" class="tool-button" data-kind="light" aria-label="조명">✦</button>',
       '</div>',
-      '<div id="palette-row" class="palette-row" role="group" aria-label="색상"></div>',
-      '<span id="selected-label" class="selected-label">민트 · 큐브 · 0° · 1/2/3 모양 · Q/E 색 · R 회전</span>',
+      '<button id="palette-toggle" class="palette-toggle" type="button" aria-expanded="false" aria-label="색상 팔레트 열기" title="색상 선택 · Q/E"><i id="selected-color-swatch" aria-hidden="true"></i></button>',
+      '<div id="palette-row" class="palette-row" role="group" aria-label="색상" hidden></div>',
+      '<span class="block-stack" aria-label="보유 블록"><i aria-hidden="true">◆</i><strong id="build-inventory-count">24</strong></span>',
+      '<span id="selected-label" class="selected-label sr-only">민트 · 큐브 · 0° · 1/2/3 모양 · Q/E 색 · R 회전</span>',
       '</section>',
       '<div id="look-zone" class="look-zone" aria-hidden="true"></div>',
       '<div class="mobile-controls" aria-label="모바일 조작">',
@@ -292,8 +307,8 @@ export class GameUI {
       '<section id="start-overlay" class="start-overlay">',
       '<div class="start-card glass">',
       '<span class="eyebrow">비동기 공동 건축 실험</span>',
-      '<h1>누군가 만든 세계에<br><em>한 칸을 더하세요.</em></h1>',
-      '<p id="start-description">WASD 이동 · 클릭 배치 · 우클릭 제거 · 1/2/3 모양 · Q/E 색 · R 회전 · F 생산 · X 초기화</p>',
+      '<h1>별빛을 잇고<br><em>루멘문을 완성하세요.</em></h1>',
+      '<p id="start-description">WASD 이동 · 클릭 배치 · 1/2/3 모양 · Q/E 색 · R 회전 · I 인벤토리 · M 미션</p>',
       '<button id="start-button" data-testid="start-button" type="button">월드 들어가기 <span>→</span></button>',
       '<button id="analytics-start-settings-button" class="analytics-start-settings-button" type="button">개인정보 · 통계 설정</button>',
       '<small id="storage-description">저장 위치: 이 브라우저의 IndexedDB</small>',
@@ -377,6 +392,12 @@ export class GameUI {
       "#storage-description",
       HTMLElement,
     );
+    this.worldPanel = requiredElement(root, ".world-panel", HTMLElement);
+    this.worldPanelToggle = requiredElement(
+      root,
+      "#world-panel-toggle",
+      HTMLButtonElement,
+    );
     this.ownerCard = requiredElement(root, "#owner-card", HTMLElement);
     this.ownerEmblem = requiredElement(root, "#owner-emblem", HTMLElement);
     this.ownerName = requiredElement(root, "#owner-name", HTMLElement);
@@ -408,6 +429,23 @@ export class GameUI {
     this.playerState = requiredElement(root, "#player-state", HTMLElement);
     this.toastElement = requiredElement(root, "#toast", HTMLElement);
     this.selectedLabel = requiredElement(root, "#selected-label", HTMLElement);
+    this.buildTray = requiredElement(root, ".build-tray", HTMLElement);
+    this.paletteRow = requiredElement(root, "#palette-row", HTMLElement);
+    this.paletteToggle = requiredElement(
+      root,
+      "#palette-toggle",
+      HTMLButtonElement,
+    );
+    this.selectedColorSwatch = requiredElement(
+      root,
+      "#selected-color-swatch",
+      HTMLElement,
+    );
+    this.buildInventoryCount = requiredElement(
+      root,
+      "#build-inventory-count",
+      HTMLElement,
+    );
     this.fatalOverlay = requiredElement(root, "#fatal-overlay", HTMLElement);
     this.fatalTitle = requiredElement(root, "#fatal-title", HTMLElement);
     this.fatalMessage = requiredElement(root, "#fatal-message", HTMLElement);
@@ -443,6 +481,11 @@ export class GameUI {
     this.removalHold = requiredElement(root, "#removal-hold", HTMLElement);
     this.removalHoldBar = requiredElement(root, "#removal-hold-bar", HTMLElement);
     this.missionPanel = requiredElement(root, "#mission-panel", HTMLElement);
+    this.missionPanelToggle = requiredElement(
+      root,
+      "#mission-panel-toggle",
+      HTMLButtonElement,
+    );
     this.missionFloor = requiredElement(root, "#mission-floor", HTMLElement);
     this.missionTitle = requiredElement(root, "#mission-title", HTMLElement);
     this.missionStage = requiredElement(root, "#mission-stage", HTMLElement);
@@ -575,7 +618,7 @@ export class GameUI {
       HTMLButtonElement,
     );
 
-    this.buildPalette(requiredElement(root, "#palette-row", HTMLElement));
+    this.buildPalette(this.paletteRow);
     this.updateSelectedLabel();
     this.updateTouchCopy();
     this.setAnalyticsConsent("undecided");
@@ -602,6 +645,15 @@ export class GameUI {
         this.closeAnalyticsSettings();
       }
     });
+    this.worldPanelToggle.addEventListener("click", () => {
+      this.toggleWorldPanel();
+    });
+    this.missionPanelToggle.addEventListener("click", () => {
+      this.toggleMissionPanel();
+    });
+    this.paletteToggle.addEventListener("click", () => {
+      this.togglePalette();
+    });
     this.fatalRetryButton.addEventListener("click", () => {
       this.fatalRetryAction();
     });
@@ -609,6 +661,20 @@ export class GameUI {
       this.recoveryRetryAction?.();
     });
     window.addEventListener("keydown", (event) => {
+      if (event.code === "KeyI" && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        releasePointerLockForDialog();
+        this.toggleWorldPanel();
+        return;
+      }
+      if (event.code === "KeyM" && !isEditableTarget(event.target)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        releasePointerLockForDialog();
+        this.toggleMissionPanel();
+        return;
+      }
       if (event.key === "Escape" && !this.analyticsSettingsOverlay.hidden) {
         event.stopImmediatePropagation();
         this.closeAnalyticsSettings();
@@ -811,7 +877,7 @@ export class GameUI {
     this.ownerMissionMeta.textContent = missionDetails
       ? missionDetails.missionName + " · " + String(missionDetails.layer) + "층"
       : isMissionBlock
-        ? "루멘문"
+        ? "별빛 관문"
         : "";
     if (missionDetails) {
       this.ownerCard.dataset["missionContributionId"] =
@@ -890,6 +956,7 @@ export class GameUI {
       const button = target.closest<HTMLButtonElement>("[data-contributor-id]");
       const publicId = button?.dataset["contributorId"];
       if (publicId) {
+        this.setMissionPanelExpanded(false);
         handler(publicId);
       }
     });
@@ -934,15 +1001,18 @@ export class GameUI {
 
     const total = Math.max(1, state.totalSlots);
     const confirmed = Math.max(0, Math.min(total, state.confirmedSlots));
-    const percentage = Math.round((confirmed / total) * 100);
+    const glow = missionGlowFromFilledSlots(confirmed, total);
     this.missionTitle.textContent = state.missionName;
     this.missionFloor.textContent =
       state.missionName + " · " + String(state.layer) + "층";
-    this.missionStage.textContent = missionStageLabel(state.stage);
+    this.missionStage.textContent = "✦ " + String(glow) + "%";
+    this.missionStage.title = missionStageLabel(state.stage);
     this.missionStage.dataset["stage"] = String(state.stage);
-    this.missionProgressBar.style.width = String(percentage) + "%";
+    this.missionStage.dataset["glow"] = String(glow);
+    this.missionProgressBar.style.width = String(glow) + "%";
+    this.missionProgressBar.dataset["glow"] = String(glow);
     this.missionProgressLabel.textContent =
-      String(percentage) + "% · " + String(confirmed) + "/" + String(total);
+      String(glow) + "% · " + String(confirmed) + "/" + String(total);
     this.missionMyContribution.textContent = String(state.myContributionCount);
     this.missionContributorCount.textContent =
       String(state.contributorCount) + "명";
@@ -1100,6 +1170,7 @@ export class GameUI {
 
   setProgressHud(state: ProgressHudState): void {
     this.inventoryCount.textContent = String(state.inventory);
+    this.buildInventoryCount.textContent = String(state.inventory);
     this.baseProgress.textContent = String(state.baseBuilt) + "/16";
     this.producerProgress.textContent = String(state.producerBuilt) + "/8";
     this.producerLevel.textContent = "Lv." + String(state.producerLevel);
@@ -1409,6 +1480,11 @@ export class GameUI {
     this.selectedLabel.textContent = isTouchLayout()
       ? selectionLabel
       : selectionLabel + " · 1/2/3 모양 · Q/E 색 · R 회전";
+    this.selectedColorSwatch.style.setProperty(
+      "--selected-swatch",
+      "#" + color.value.toString(16).padStart(6, "0"),
+    );
+    this.paletteToggle.title = color.name + " · 색상 선택 · Q/E";
   }
 
   private selectColor(colorIndex: number): Readonly<BuildSelection> {
@@ -1420,7 +1496,45 @@ export class GameUI {
       );
     });
     this.updateSelectedLabel();
+    this.closePalette();
     return this.selection;
+  }
+
+  private toggleWorldPanel(): void {
+    const expanded = !this.worldPanel.classList.contains("is-expanded");
+    this.worldPanel.classList.toggle("is-expanded", expanded);
+    this.worldPanelToggle.setAttribute("aria-expanded", String(expanded));
+    this.worldPanelToggle.setAttribute(
+      "aria-label",
+      expanded ? "인벤토리와 단축키 닫기" : "인벤토리와 단축키 열기",
+    );
+  }
+
+  private toggleMissionPanel(): void {
+    const expanded = this.missionPanel.classList.contains("is-collapsed");
+    this.setMissionPanelExpanded(expanded);
+  }
+
+  private setMissionPanelExpanded(expanded: boolean): void {
+    this.missionPanel.classList.toggle("is-collapsed", !expanded);
+    this.missionPanelToggle.setAttribute("aria-expanded", String(expanded));
+    this.missionPanelToggle.setAttribute(
+      "aria-label",
+      expanded ? "공동 미션 상세 닫기" : "공동 미션 상세 열기",
+    );
+  }
+
+  private togglePalette(): void {
+    const expanded = this.paletteRow.hidden === true;
+    this.paletteRow.hidden = !expanded;
+    this.buildTray.classList.toggle("is-palette-open", expanded);
+    this.paletteToggle.setAttribute("aria-expanded", String(expanded));
+  }
+
+  private closePalette(): void {
+    this.paletteRow.hidden = true;
+    this.buildTray.classList.remove("is-palette-open");
+    this.paletteToggle.setAttribute("aria-expanded", "false");
   }
 
   private updateTouchCopy(): void {
@@ -1436,6 +1550,14 @@ export function isTouchLayout(): boolean {
   return (
     window.matchMedia("(pointer: coarse)").matches ||
     window.innerWidth <= 760
+  );
+}
+
+function isEditableTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
   );
 }
 
@@ -1542,7 +1664,7 @@ function zoneLabel(zone: VoxelBlock["zone"]): string {
     case "public":
       return "공용 확장부";
     case "mission":
-      return "루멘문";
+      return "공동 미션";
   }
 }
 
