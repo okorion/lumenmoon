@@ -73,4 +73,20 @@ describe("공개 메타데이터", () => {
     );
     expect(sizes.every((size) => size > 1_024)).toBe(true);
   });
+
+  it("Vercel이 Vite 산출물만 프로덕션에 배포한다", async () => {
+    const config = JSON.parse(
+      await readFile(join(ROOT, "vercel.json"), "utf8"),
+    ) as {
+      framework?: string;
+      buildCommand?: string;
+      outputDirectory?: string;
+    };
+
+    expect(config).toMatchObject({
+      framework: "vite",
+      buildCommand: "npm run build",
+      outputDirectory: "dist",
+    });
+  });
 });
