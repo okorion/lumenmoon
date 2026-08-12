@@ -26,6 +26,21 @@ import {
   type MissionIdentitySnapshot,
 } from "../domain/mission";
 import {
+  DEFAULT_FREE_MODE_RULES,
+  FREE_MODE_MAX_BLOCKS_PER_CHUNK,
+  createUnclaimedFreeModeProgress,
+  decideFreeModeRemoval,
+  getNextFreeModeGrantInMs,
+  hasFreeModeDeterministicGround,
+  isFreeModeSpawnClearancePosition,
+  settleFreeModeInventory as settleFreeModeInventoryProgress,
+  type FreeModeProgress,
+  type FreeModeRulesConfig,
+  type LocalFreeModeOperation,
+  type LocalFreeModeWorldState,
+} from "../domain/freeMode";
+import {
+  CHUNK_SIZE,
   LOCAL_PLAYER,
   SYSTEM_OWNER,
   type BlockOwner,
@@ -33,7 +48,10 @@ import {
   type WorldSnapshot,
   type ZoneKind,
 } from "../domain/types";
-import { createSeedSnapshot } from "../world/seed";
+import {
+  createIdentitySeedSnapshot,
+  createSeedSnapshot,
+} from "../world/seed";
 import {
   prepareLocalSnapshot,
   withoutOnboardingBlocks,
@@ -46,11 +64,14 @@ import {
   MAX_NEARBY_VERTICAL_CHUNK_RADIUS,
   RepositoryRequestError,
   type CollaborativeWorldRepository,
+  type CommitFreeModeActionsRequest,
   type CommitWorldActionsRequest,
   type CompletedMissionsResult,
   type ContributeToMissionRequest,
   type DismantleResult,
   type DismantleTicket,
+  type FreeModeMutationResult,
+  type FreeModeOverviewResult,
   type ManualProductionSession,
   type MissionContributionResult,
   type MissionOverviewResult,
@@ -60,15 +81,21 @@ import {
   type ProductionResult,
   type WorldMutationResult,
 } from "./CollaborativeWorldRepository";
-import type { WorldRepository } from "./WorldRepository";
+import {
+  FreeModeRevisionConflictError,
+  freeModeRevision,
+  type WorldRepository,
+} from "./WorldRepository";
 import {
   areFaceAdjacent,
+  validateCommitFreeModeActions,
   validateCommitWorldActions,
 } from "./worldActionValidation";
 
 interface LocalRepositoryOptions {
   clock?: Clock;
   config?: Readonly<GameRulesConfig>;
+  freeModeConfig?: Readonly<FreeModeRulesConfig>;
   player?: BlockOwner;
 }
 
@@ -87,12 +114,13 @@ interface StoredMutation<T> {
 
 const storageMutationQueues = new WeakMap<WorldRepository, Promise<void>>();
 const CROSS_TAB_MUTATION_LOCK = "lumenmoon:world-repository-mutations";
+const FREE_MODE_REVISION_RETRY_LIMIT = 4;
 
 /**
  * 기존 IndexedDB/Memory 저장소를 공동 월드 명령 계약에 맞춘 로컬 어댑터다.
  * 온라인 보안 경계의 대체물은 아니지만 같은 클라이언트 흐름을 테스트할 수 있다.
- * 멱등 처리 캐시는 현재 탭 수명에 한정된다. 새로고침·다중 탭 권위성은 DB에
- * operation 행을 보존하는 SupabaseRepository만 보장한다.
+ * 자유 모드의 멱등 원장과 revision CAS는 IndexedDB에서도 새로고침·다중 탭에
+ * 걸쳐 보존한다. 온라인 권한 검증 자체는 Supabase RPC만 담당한다.
  */
 export class LocalCollaborativeWorldRepository
   implements CollaborativeWorldRepository
@@ -102,6 +130,7 @@ export class LocalCollaborativeWorldRepository
   private readonly storage: WorldRepository;
   private readonly clock: Clock;
   private readonly config: Readonly<GameRulesConfig>;
+  private readonly freeModeConfig: Readonly<FreeModeRulesConfig>;
   private readonly player: BlockOwner;
   private readonly mutations = new Map<
     string,
@@ -131,7 +160,29 @@ export class LocalCollaborativeWorldRepository
     this.storage = storage;
     this.clock = options.clock ?? new SystemClock();
     this.config = options.config ?? DEFAULT_GAME_RULES;
+    this.freeModeConfig = options.freeModeConfig ?? DEFAULT_FREE_MODE_RULES;
     this.player = options.player ?? LOCAL_PLAYER;
+  }
+
+  async getPlayerIdentity(worldId: string) {
+    return this.serializeMutation(async () => {
+      this.worldIds.add(worldId);
+      const now = this.clock.now();
+      let snapshot = await this.storage.load(worldId);
+      if (!snapshot) {
+        snapshot = createIdentitySeedSnapshot(now);
+        if (snapshot.worldId !== worldId) {
+          throw new RepositoryRequestError("로컬 월드 ID가 일치하지 않습니다.", {
+            code: "world-mismatch",
+          });
+        }
+        await this.storage.save(snapshot);
+      }
+      return {
+        player: { ...this.player },
+        serverNow: Math.max(now, snapshot.updatedAt),
+      };
+    });
   }
 
   async bootstrapPlayer(worldId: string): Promise<PlayerBootstrap> {
@@ -148,7 +199,12 @@ export class LocalCollaborativeWorldRepository
         code: "world-mismatch",
       });
     }
-    const prepared = prepareLocalSnapshot(source, now, this.config);
+    const prepared = prepareLocalSnapshot(
+      source,
+      now,
+      this.config,
+      this.freeModeConfig,
+    );
     if (prepared.changed || !(await this.storage.load(worldId))) {
       await this.storage.save(prepared.snapshot);
     }
@@ -165,6 +221,19 @@ export class LocalCollaborativeWorldRepository
   async loadNearbyBlocks(
     request: NearbyBlocksRequest,
   ): Promise<NearbyBlocksResult> {
+    return this.loadNearbyBlocksByMode(request, "mission");
+  }
+
+  async loadNearbyFreeModeBlocks(
+    request: NearbyBlocksRequest,
+  ): Promise<NearbyBlocksResult> {
+    return this.loadNearbyBlocksByMode(request, "free");
+  }
+
+  private async loadNearbyBlocksByMode(
+    request: NearbyBlocksRequest,
+    mode: "mission" | "free",
+  ): Promise<NearbyBlocksResult> {
     validateChunkRequest(request);
     const snapshot = await this.requireSnapshot(request.worldId);
     const minX = request.chunkX - request.radius;
@@ -176,7 +245,11 @@ export class LocalCollaborativeWorldRepository
     const blocks = snapshot.blocks
       // 공동 미션의 정규 원본은 mission overview가 유일한 읽기 소스다.
       // 일반 블록 조회에 섞으면 클라이언트 대칭 복제와 중복 렌더링된다.
-      .filter(({ zone }) => zone !== "mission")
+      .filter((block) =>
+        mode === "free"
+          ? block.source === "free"
+          : block.zone !== "mission" && block.source !== "free",
+      )
       .filter(({ position }) => {
         const chunkX = Math.floor(position.x / 16);
         const chunkY = Math.floor(position.y / 16);
@@ -232,17 +305,18 @@ export class LocalCollaborativeWorldRepository
 
   async getMissionOverview(worldId: string): Promise<MissionOverviewResult> {
     const snapshot = await this.requireSnapshot(worldId);
+    const missionBlocks = missionModeBlocks(snapshot.blocks);
     const state = requireLocalMissionState(snapshot);
     const localState = requireLocalState(snapshot);
     const bay = createStarterBayLayout(localState.baySlotIndex);
     const baseBuilt = countFilledGuides(
       bay.baseGuides,
-      snapshot.blocks,
+      missionBlocks,
       this.player.id,
     );
     const producerBuilt = countFilledGuides(
       bay.producerGuides,
-      snapshot.blocks,
+      missionBlocks,
       this.player.id,
     );
     return {
@@ -311,15 +385,16 @@ export class LocalCollaborativeWorldRepository
     );
     let progressForContribution = localState.progress;
     if (!isReplay) {
+      const missionBlocks = missionModeBlocks(snapshot.blocks);
       const bay = createStarterBayLayout(localState.baySlotIndex);
       const baseCount = countFilledGuides(
         bay.baseGuides,
-        snapshot.blocks,
+        missionBlocks,
         this.player.id,
       );
       const producerCount = countFilledGuides(
         bay.producerGuides,
-        snapshot.blocks,
+        missionBlocks,
         this.player.id,
       );
       if (
@@ -391,6 +466,370 @@ export class LocalCollaborativeWorldRepository
     };
   }
 
+  async getFreeModeOverview(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    return this.serializeMutation(() =>
+      this.settleFreeModeInventoryInternal(worldId),
+    );
+  }
+
+  async settleFreeModeInventory(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    return this.serializeMutation(() =>
+      this.settleFreeModeInventoryInternal(worldId),
+    );
+  }
+
+  private async settleFreeModeInventoryInternal(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    return this.retryFreeModeRevision(() =>
+      this.settleFreeModeInventoryAttempt(worldId),
+    );
+  }
+
+  private async settleFreeModeInventoryAttempt(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    const clockNow = this.clock.now();
+    const snapshot = await this.requireSnapshot(worldId);
+    const stateResult = ensureLocalFreeModeState(
+      snapshot,
+      this.player.id,
+      clockNow,
+    );
+    const expectedRevision = freeModeRevision(snapshot);
+    const expectedStateRevision = stateResult.state.revision ?? 0;
+    const now = freeModeAuthorityNow(stateResult.state, clockNow);
+    const settlement = settleFreeModeInventoryProgress(
+      stateResult.state.progress,
+      now,
+      this.freeModeConfig,
+    );
+    const changed =
+      stateResult.created ||
+      !sameFreeModeProgress(stateResult.state.progress, settlement.progress);
+    stateResult.state.progress = cloneFreeModeProgress(settlement.progress);
+    if (changed) {
+      stateResult.state.updatedAt = now;
+      stateResult.state.revision = expectedStateRevision + 1;
+      snapshot.localFreeModeRevision = expectedRevision + 1;
+      snapshot.schemaVersion = 3;
+      snapshot.updatedAt = now;
+      await this.storage.saveFreeModeState(
+        snapshot,
+        this.player.id,
+        expectedRevision,
+      );
+    }
+    return this.freeModeOverview(
+      worldId,
+      settlement.progress,
+      settlement.produced,
+      now,
+    );
+  }
+
+  async commitFreeModeActions(
+    request: CommitFreeModeActionsRequest,
+  ): Promise<FreeModeMutationResult> {
+    return this.serializeMutation(() =>
+      this.commitFreeModeActionsInternal(request),
+    );
+  }
+
+  private async commitFreeModeActionsInternal(
+    request: CommitFreeModeActionsRequest,
+  ): Promise<FreeModeMutationResult> {
+    if (
+      request.actions.some(
+        (action) => action.type !== "place" && action.type !== "remove",
+      )
+    ) {
+      throw new RangeError("자유 모드에서는 블록 놓기와 제거만 가능합니다.");
+    }
+    validateCommitFreeModeActions(request);
+    const fingerprint = fingerprintFreeModeCommit(request);
+    return this.retryFreeModeRevision(() =>
+      this.commitFreeModeActionsAttempt(request, fingerprint),
+    );
+  }
+
+  private async commitFreeModeActionsAttempt(
+    request: CommitFreeModeActionsRequest,
+    fingerprint: string,
+  ): Promise<FreeModeMutationResult> {
+    const clockNow = this.clock.now();
+    const source = await this.requireSnapshot(request.worldId);
+    const stateResult = ensureLocalFreeModeState(
+      source,
+      this.player.id,
+      clockNow,
+    );
+    const expectedRevision = freeModeRevision(source);
+    const expectedStateRevision = stateResult.state.revision ?? 0;
+    const now = freeModeAuthorityNow(stateResult.state, clockNow);
+    const stored = await this.storage.loadFreeModeOperation(
+      request.worldId,
+      this.player.id,
+      request.idempotencyKey,
+      now,
+    );
+    if (stored) {
+      assertSameFingerprint(stored.fingerprint, fingerprint);
+      return freeModeMutationFromOperation(
+        request.worldId,
+        stored,
+        true,
+      );
+    }
+    const next = cloneSnapshot(source);
+    const state = requireLocalFreeModeState(next, this.player.id);
+    state.progress = settleFreeModeInventoryProgress(
+      state.progress,
+      now,
+      this.freeModeConfig,
+    ).progress;
+    const upsertedBlocks: VoxelBlock[] = [];
+    const removedBlockIds: string[] = [];
+
+    for (const action of request.actions) {
+      if (action.type === "place") {
+        if (
+          next.blocks.some(
+            (block) =>
+              block.source === "free" && block.id === action.blockId,
+          )
+        ) {
+          throw ruleError("이미 사용 중인 블록 ID입니다.", "duplicate-block");
+        }
+        if (
+          next.blocks.some(
+            ({ position, source, owner }) =>
+              (source === "free" || owner.id === SYSTEM_OWNER.id) &&
+              position.x === action.position.x &&
+              position.y === action.position.y &&
+              position.z === action.position.z,
+          )
+        ) {
+          throw ruleError("이미 블록이 있는 좌표입니다.", "duplicate-coordinate");
+        }
+        const blocksInChunk = next.blocks.filter(
+          (block) =>
+            block.source === "free" &&
+            sameChunk(block.position, action.position),
+        ).length;
+        if (blocksInChunk >= FREE_MODE_MAX_BLOCKS_PER_CHUNK) {
+          throw ruleError(
+            "이 구역에는 자유 모드 블록을 더 놓을 수 없습니다.",
+            "chunk-full",
+          );
+        }
+        if (state.progress.inventory <= 0) {
+          throw ruleError("블록 재고가 부족합니다.", "insufficient-inventory");
+        }
+        if (action.position.y < 1) {
+          throw ruleError(
+            "자유 모드 블록은 바닥 위에만 놓을 수 있습니다.",
+            "protected-zone",
+          );
+        }
+        if (isFreeModeSpawnClearancePosition(action.position)) {
+          throw ruleError(
+            "공용 스폰과 광장으로 나가는 길은 비워 두어야 합니다.",
+            "protected-zone",
+          );
+        }
+        if (
+          action.position.y === 1 &&
+          !hasFreeModeDeterministicGround(next.blocks, action.position)
+        ) {
+          throw ruleError(
+            "확정된 지면 위에서만 자유 건축을 시작할 수 있습니다.",
+            "invalid-support",
+          );
+        }
+        if (action.position.y > 1 && !action.supportId) {
+          throw ruleError(
+            "공중에 놓는 블록은 인접한 자유 모드 블록이 필요합니다.",
+            "invalid-support",
+          );
+        }
+        let supportId: string | undefined;
+        if (action.supportId) {
+          const support = next.blocks.find(
+            (block) =>
+              block.source === "free" && block.id === action.supportId,
+          );
+          if (!support && action.position.y === 1) {
+            // 결정적 바닥에는 DB/자유 모드 행이 없으므로 지지 참조를 저장하지 않는다.
+            supportId = undefined;
+          } else if (
+            !support ||
+            !areFaceAdjacent(support.position, action.position)
+          ) {
+            throw ruleError(
+              "지지 블록이 없거나 배치 면에 인접하지 않습니다.",
+              "invalid-support",
+            );
+          } else {
+            supportId = support.id;
+          }
+        }
+        if (state.progress.inventory >= this.freeModeConfig.maxInventory) {
+          state.progress.lastSettledAt = now;
+        }
+        const block: VoxelBlock = {
+          id: action.blockId,
+          worldId: request.worldId,
+          position: { ...action.position },
+          kind: action.kind,
+          rotation: action.rotation,
+          colorIndex: action.colorIndex,
+          owner: { ...this.player },
+          zone: "public",
+          createdAt: now,
+          source: "free",
+          ...(supportId ? { supportId } : {}),
+        };
+        next.blocks.push(block);
+        upsertedBlocks.push(cloneBlock(block));
+        state.progress.inventory -= 1;
+        continue;
+      }
+
+      const blockIndex = next.blocks.findIndex(
+        ({ id, source }) => source === "free" && id === action.blockId,
+      );
+      const block = next.blocks[blockIndex];
+      if (!block) {
+        if (next.blocks.some(({ id }) => id === action.blockId)) {
+          throw ruleError(
+            "이 블록은 자유 모드에서 제거할 수 없습니다.",
+            "not-free-mode-block",
+          );
+        }
+        throw ruleError("제거할 블록을 찾을 수 없습니다.", "block-not-found");
+      }
+      const permission = decideFreeModeRemoval({
+        actorId: this.player.id,
+        block,
+        allBlocks: next.blocks,
+        now,
+        config: this.freeModeConfig,
+      });
+      if (!permission.allowed) {
+        const message =
+          permission.reason === "foreign-block-locked"
+            ? "다른 사람이 놓은 블록은 3일 뒤부터 제거할 수 있습니다."
+            : permission.reason === "not-free-mode-block"
+              ? "이 블록은 자유 모드에서 제거할 수 없습니다."
+              : "이 블록은 제거할 수 없습니다.";
+        throw ruleError(message, permission.reason);
+      }
+      if (block.owner.id === this.player.id) {
+        for (const child of next.blocks) {
+          if (child.source !== "free" || child.supportId !== block.id) {
+            continue;
+          }
+          delete child.supportId;
+          upsertedBlocks.push(cloneBlock(child));
+        }
+      }
+      next.blocks.splice(blockIndex, 1);
+      removedBlockIds.push(block.id);
+      const inventoryBeforeRefund = state.progress.inventory;
+      state.progress.inventory = Math.min(
+        this.freeModeConfig.maxInventory,
+        state.progress.inventory + permission.refundInventory,
+      );
+      if (
+        inventoryBeforeRefund < this.freeModeConfig.maxInventory &&
+        state.progress.inventory >= this.freeModeConfig.maxInventory
+      ) {
+        state.progress.lastSettledAt = now;
+      }
+    }
+
+    const result: FreeModeMutationResult = {
+      worldId: request.worldId,
+      idempotencyKey: request.idempotencyKey,
+      upsertedBlocks,
+      removedBlockIds,
+      progress: cloneFreeModeProgress(state.progress),
+      serverNow: now,
+      replayed: false,
+    };
+    const operation: LocalFreeModeOperation = {
+      idempotencyKey: request.idempotencyKey,
+      fingerprint,
+      upsertedBlocks: upsertedBlocks.map(cloneBlock),
+      removedBlockIds: [...removedBlockIds],
+      progress: cloneFreeModeProgress(state.progress),
+      serverNow: now,
+    };
+    state.updatedAt = now;
+    state.revision = expectedStateRevision + 1;
+    next.localFreeModeRevision = expectedRevision + 1;
+    next.schemaVersion = 3;
+    next.updatedAt = now;
+    await this.storage.saveFreeModeCommit(
+      next,
+      this.player.id,
+      operation,
+      expectedRevision,
+    );
+    return result;
+  }
+
+  private async retryFreeModeRevision<T>(
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    let lastConflict: FreeModeRevisionConflictError | null = null;
+    for (let attempt = 0; attempt < FREE_MODE_REVISION_RETRY_LIMIT; attempt += 1) {
+      try {
+        return await operation();
+      } catch (error) {
+        if (!(error instanceof FreeModeRevisionConflictError)) throw error;
+        lastConflict = error;
+      }
+    }
+    throw new RepositoryRequestError(
+      "다른 탭의 자유 모드 변경과 겹쳤습니다. 최신 상태를 다시 불러와 주세요.",
+      {
+        code: "free-mode-revision-conflict",
+        retryable: true,
+        cause: lastConflict,
+      },
+    );
+  }
+
+  private freeModeOverview(
+    worldId: string,
+    progress: FreeModeProgress,
+    produced: number,
+    now: number,
+  ): FreeModeOverviewResult {
+    return {
+      worldId,
+      player: { ...this.player },
+      progress: cloneFreeModeProgress(progress),
+      maxInventory: this.freeModeConfig.maxInventory,
+      grantAmount: this.freeModeConfig.grantAmount,
+      grantIntervalMs: this.freeModeConfig.grantIntervalMs,
+      foreignRemovalAgeMs: this.freeModeConfig.foreignRemovalAgeMs,
+      nextGrantInMs: getNextFreeModeGrantInMs(
+        progress,
+        now,
+        this.freeModeConfig,
+      ),
+      produced,
+      serverNow: now,
+    };
+  }
+
   async commitWorldActions(
     request: CommitWorldActionsRequest,
   ): Promise<WorldMutationResult> {
@@ -411,6 +850,7 @@ export class LocalCollaborativeWorldRepository
     const now = this.clock.now();
     const source = await this.requireSnapshot(request.worldId);
     const next = cloneSnapshot(source);
+    const missionBlocks = () => missionModeBlocks(next.blocks);
     const state = requireLocalState(next);
     const bay = createStarterBayLayout(state.baySlotIndex);
     const reservedBays = Array.from(
@@ -421,7 +861,7 @@ export class LocalCollaborativeWorldRepository
     const removedBlockIds: string[] = [];
     const producerCountBefore = countFilledGuides(
       bay.producerGuides,
-      next.blocks,
+      missionBlocks(),
       this.player.id,
     );
     const producerWasOperational = isProductionOperational(
@@ -438,13 +878,16 @@ export class LocalCollaborativeWorldRepository
       if (!reset.reset) {
         throw ruleError("완성한 베이는 초기화할 수 없습니다.");
       }
-      const retained = withoutOnboardingBlocks(next.blocks, this.player.id);
       removedBlockIds.push(
         ...next.blocks
-          .filter((block) => !retained.some(({ id }) => id === block.id))
+          .filter(
+            (block) =>
+              block.owner.id === this.player.id &&
+              block.source === "onboarding",
+          )
           .map(({ id }) => id),
       );
-      next.blocks = retained;
+      next.blocks = withoutOnboardingBlocks(next.blocks, this.player.id);
       state.progress = reset.progress;
     } else {
       for (const action of request.actions) {
@@ -452,11 +895,13 @@ export class LocalCollaborativeWorldRepository
           continue;
         }
         if (action.type === "place") {
-          if (next.blocks.some((block) => block.id === action.blockId)) {
+          if (
+            missionBlocks().some((block) => block.id === action.blockId)
+          ) {
             throw ruleError("이미 사용 중인 블록 ID입니다.", "duplicate-block");
           }
           if (
-            next.blocks.some(
+            missionBlocks().some(
               ({ position }) =>
                 position.x === action.position.x &&
                 position.y === action.position.y &&
@@ -497,7 +942,7 @@ export class LocalCollaborativeWorldRepository
             );
           }
           if (action.supportId) {
-            const support = next.blocks.find(
+            const support = missionBlocks().find(
               (block) => block.id === action.supportId,
             );
             if (!support || !areFaceAdjacent(support.position, action.position)) {
@@ -528,10 +973,22 @@ export class LocalCollaborativeWorldRepository
           state.progress.inventory -= 1;
         } else {
           const blockIndex = next.blocks.findIndex(
-            (block) => block.id === action.blockId,
+            (candidate) =>
+              candidate.source !== "free" && candidate.id === action.blockId,
           );
           const block = next.blocks[blockIndex];
           if (!block) {
+            if (
+              next.blocks.some(
+                (candidate) =>
+                  candidate.source === "free" && candidate.id === action.blockId,
+              )
+            ) {
+              throw ruleError(
+                "자유 모드 블록은 자유 모드에서만 제거할 수 있습니다.",
+                "free-mode-only",
+              );
+            }
             throw ruleError("제거할 블록을 찾을 수 없습니다.", "block-not-found");
           }
           if (block.owner.id !== this.player.id) {
@@ -543,7 +1000,7 @@ export class LocalCollaborativeWorldRepository
           const permission = decideRemoval({
             actorId: this.player.id,
             block,
-            allBlocks: next.blocks,
+            allBlocks: missionBlocks(),
             zoneOwnerId: this.player.id,
           });
           if (!permission.allowed) {
@@ -559,7 +1016,7 @@ export class LocalCollaborativeWorldRepository
       }
       const producerCountAfter = countFilledGuides(
         bay.producerGuides,
-        next.blocks,
+        missionBlocks(),
         this.player.id,
       );
       if (
@@ -598,11 +1055,12 @@ export class LocalCollaborativeWorldRepository
   ): Promise<ProductionResult> {
     const now = this.clock.now();
     const snapshot = await this.requireSnapshot(worldId);
+    const missionBlocks = missionModeBlocks(snapshot.blocks);
     const state = requireLocalState(snapshot);
     const bay = createStarterBayLayout(state.baySlotIndex);
     const producerCount = countFilledGuides(
       bay.producerGuides,
-      snapshot.blocks,
+      missionBlocks,
       this.player.id,
     );
     let produced = 0;
@@ -651,11 +1109,12 @@ export class LocalCollaborativeWorldRepository
     }
     const now = this.clock.now();
     const snapshot = await this.requireSnapshot(worldId);
+    const missionBlocks = missionModeBlocks(snapshot.blocks);
     const state = requireLocalState(snapshot);
     const bay = createStarterBayLayout(state.baySlotIndex);
     const producerCount = countFilledGuides(
       bay.producerGuides,
-      snapshot.blocks,
+      missionBlocks,
       this.player.id,
     );
     if (!isProductionOperational(state.progress, producerCount, this.config)) {
@@ -716,11 +1175,12 @@ export class LocalCollaborativeWorldRepository
       throw ruleError("수동 생산 세션이 만료되었습니다.", "session-expired");
     }
     const snapshot = await this.requireSnapshot(worldId);
+    const missionBlocks = missionModeBlocks(snapshot.blocks);
     const state = requireLocalState(snapshot);
     const bay = createStarterBayLayout(state.baySlotIndex);
     const producerCount = countFilledGuides(
       bay.producerGuides,
-      snapshot.blocks,
+      missionBlocks,
       this.player.id,
     );
     if (!isProductionOperational(state.progress, producerCount, this.config)) {
@@ -781,14 +1241,26 @@ export class LocalCollaborativeWorldRepository
     }
     const now = this.clock.now();
     const snapshot = await this.requireSnapshot(worldId);
-    const block = snapshot.blocks.find(({ id }) => id === blockId);
+    const block = snapshot.blocks.find(
+      ({ id, source }) => source !== "free" && id === blockId,
+    );
     if (!block) {
+      if (
+        snapshot.blocks.some(
+          ({ id, source }) => source === "free" && id === blockId,
+        )
+      ) {
+        throw ruleError(
+          "자유 모드 블록은 자유 모드에서만 제거할 수 있습니다.",
+          "free-mode-only",
+        );
+      }
       throw ruleError("철거할 블록을 찾을 수 없습니다.", "block-not-found");
     }
     const permission = decideRemoval({
       actorId: this.player.id,
       block,
-      allBlocks: snapshot.blocks,
+      allBlocks: missionModeBlocks(snapshot.blocks),
       heldMs: 0,
     });
     if (!permission.requiresHold || permission.reason !== "hold-required") {
@@ -862,7 +1334,9 @@ export class LocalCollaborativeWorldRepository
     }
     const snapshot = await this.requireSnapshot(worldId);
     const state = requireLocalState(snapshot);
-    const blockIndex = snapshot.blocks.findIndex(({ id }) => id === ticket.blockId);
+    const blockIndex = snapshot.blocks.findIndex(
+      ({ id, source }) => source !== "free" && id === ticket.blockId,
+    );
     const block = snapshot.blocks[blockIndex];
     if (!block) {
       throw ruleError("철거할 블록을 찾을 수 없습니다.", "block-not-found");
@@ -870,7 +1344,7 @@ export class LocalCollaborativeWorldRepository
     const permission = decideRemoval({
       actorId: this.player.id,
       block,
-      allBlocks: snapshot.blocks,
+      allBlocks: missionModeBlocks(snapshot.blocks),
       heldMs: now - ticket.serverNow,
     });
     if (!permission.allowed) {
@@ -946,15 +1420,22 @@ function reconcileProgress(
 ): void {
   const state = requireLocalState(snapshot);
   const bay = createStarterBayLayout(state.baySlotIndex);
-  const baseCount = countFilledGuides(bay.baseGuides, snapshot.blocks, ownerId);
+  const missionModeBlocks = snapshot.blocks.filter(
+    ({ source }) => source !== "free",
+  );
+  const baseCount = countFilledGuides(
+    bay.baseGuides,
+    missionModeBlocks,
+    ownerId,
+  );
   const producerCount = countFilledGuides(
     bay.producerGuides,
-    snapshot.blocks,
+    missionModeBlocks,
     ownerId,
   );
   const upgradeCount = countFilledGuides(
     bay.upgradeGuides,
-    snapshot.blocks,
+    missionModeBlocks,
     ownerId,
   );
   state.progress = reconcileOnboardingCompletion(
@@ -1030,6 +1511,42 @@ function requireLocalMissionState(snapshot: WorldSnapshot) {
   return snapshot.localMissionState;
 }
 
+function ensureLocalFreeModeState(
+  snapshot: WorldSnapshot,
+  playerId: string,
+  now: number,
+): { state: LocalFreeModeWorldState; created: boolean } {
+  snapshot.localFreeModeStates ??= [];
+  const existing = snapshot.localFreeModeStates.find(
+    (state) => state.playerId === playerId,
+  );
+  if (existing) return { state: existing, created: false };
+  const state: LocalFreeModeWorldState = {
+    playerId,
+    progress: createUnclaimedFreeModeProgress(now),
+    operations: [],
+    updatedAt: now,
+    revision: 0,
+  };
+  snapshot.localFreeModeStates.push(state);
+  return { state, created: true };
+}
+
+function requireLocalFreeModeState(
+  snapshot: WorldSnapshot,
+  playerId: string,
+): LocalFreeModeWorldState {
+  const state = snapshot.localFreeModeStates?.find(
+    (candidate) => candidate.playerId === playerId,
+  );
+  if (!state) {
+    throw new RepositoryRequestError("로컬 자유 모드 상태가 없습니다.", {
+      code: "free-mode-state-missing",
+    });
+  }
+  return state;
+}
+
 function publicIdentitySnapshot(owner: BlockOwner): MissionIdentitySnapshot {
   return {
     publicId: owner.publicId,
@@ -1062,6 +1579,63 @@ function cloneTicket(ticket: DismantleTicket): DismantleTicket {
   return { ...ticket };
 }
 
+function cloneFreeModeProgress(
+  progress: FreeModeProgress,
+): FreeModeProgress {
+  return { ...progress };
+}
+
+function sameFreeModeProgress(
+  left: FreeModeProgress,
+  right: FreeModeProgress,
+): boolean {
+  return (
+    left.initialGrantClaimed === right.initialGrantClaimed &&
+    left.inventory === right.inventory &&
+    left.lastSettledAt === right.lastSettledAt
+  );
+}
+
+function freeModeAuthorityNow(
+  state: LocalFreeModeWorldState,
+  candidate: number,
+): number {
+  return Math.max(candidate, state.updatedAt, state.progress.lastSettledAt);
+}
+
+function missionModeBlocks(
+  blocks: readonly VoxelBlock[],
+): VoxelBlock[] {
+  return blocks.filter(({ source }) => source !== "free");
+}
+
+function sameChunk(
+  left: VoxelBlock["position"],
+  right: VoxelBlock["position"],
+): boolean {
+  return (
+    Math.floor(left.x / CHUNK_SIZE) === Math.floor(right.x / CHUNK_SIZE) &&
+    Math.floor(left.y / CHUNK_SIZE) === Math.floor(right.y / CHUNK_SIZE) &&
+    Math.floor(left.z / CHUNK_SIZE) === Math.floor(right.z / CHUNK_SIZE)
+  );
+}
+
+function freeModeMutationFromOperation(
+  worldId: string,
+  operation: LocalFreeModeOperation,
+  replayed: boolean,
+): FreeModeMutationResult {
+  return {
+    worldId,
+    idempotencyKey: operation.idempotencyKey,
+    upsertedBlocks: operation.upsertedBlocks.map(cloneBlock),
+    removedBlockIds: [...operation.removedBlockIds],
+    progress: cloneFreeModeProgress(operation.progress),
+    serverNow: operation.serverNow,
+    replayed,
+  };
+}
+
 function fingerprintCommit(request: CommitWorldActionsRequest): string {
   return JSON.stringify({
     worldId: request.worldId,
@@ -1086,6 +1660,16 @@ function fingerprintCommit(request: CommitWorldActionsRequest): string {
         supportId: action.supportId ?? null,
       };
     }),
+  });
+}
+
+function fingerprintFreeModeCommit(
+  request: CommitFreeModeActionsRequest,
+): string {
+  return fingerprintCommit({
+    worldId: request.worldId,
+    idempotencyKey: request.idempotencyKey,
+    actions: request.actions,
   });
 }
 

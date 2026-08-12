@@ -6,10 +6,14 @@ import {
   type RuntimeRepositoryConfig,
 } from "../config/runtimeConfig";
 import type { CollaborativeWorldRepository } from "./CollaborativeWorldRepository";
-import { IndexedDbWorldRepository } from "./IndexedDbWorldRepository";
+import {
+  IndexedDbUpgradeBlockedError,
+  IndexedDbWorldRepository,
+} from "./IndexedDbWorldRepository";
 import { LocalCollaborativeWorldRepository } from "./LocalCollaborativeWorldRepository";
 import { createSupabaseRepository } from "./SupabaseRepository";
 import {
+  FreeModeRevisionConflictError,
   MemoryWorldRepository,
   type WorldRepository,
 } from "./WorldRepository";
@@ -66,7 +70,7 @@ export function createRepositorySelection(
     : memory;
   if (!indexedDb) {
     warnings.push(
-      "IndexedDB를 사용할 수 없어 이번 접속 동안만 로컬 월드를 유지합니다.",
+      "이 기기에 저장할 수 없어 페이지를 닫으면 이번 플레이가 사라집니다.",
     );
   }
   return {
@@ -80,9 +84,10 @@ export function createRepositorySelection(
   };
 }
 
-class LocalStorageFallback implements WorldRepository {
+export class LocalStorageFallback implements WorldRepository {
   private useFallback = false;
   private warningAdded = false;
+  private primaryReadSucceeded = false;
 
   constructor(
     private readonly primary: WorldRepository,
@@ -95,8 +100,11 @@ class LocalStorageFallback implements WorldRepository {
       return this.fallback.load(worldId);
     }
     try {
-      return await this.primary.load(worldId);
-    } catch {
+      const snapshot = await this.primary.load(worldId);
+      this.primaryReadSucceeded = true;
+      return snapshot;
+    } catch (error) {
+      if (this.shouldRethrow(error)) throw error;
       this.activateFallback();
       return this.fallback.load(worldId);
     }
@@ -109,9 +117,62 @@ class LocalStorageFallback implements WorldRepository {
     }
     try {
       await this.primary.save(snapshot);
-    } catch {
+      this.primaryReadSucceeded = true;
+    } catch (error) {
+      if (this.shouldRethrow(error)) throw error;
       this.activateFallback();
       await this.fallback.save(snapshot);
+    }
+  }
+
+  async loadFreeModeOperation(
+    ...args: Parameters<WorldRepository["loadFreeModeOperation"]>
+  ) {
+    if (this.useFallback) {
+      return this.fallback.loadFreeModeOperation(...args);
+    }
+    try {
+      const operation = await this.primary.loadFreeModeOperation(...args);
+      this.primaryReadSucceeded = true;
+      return operation;
+    } catch (error) {
+      if (this.shouldRethrow(error)) throw error;
+      this.activateFallback();
+      return this.fallback.loadFreeModeOperation(...args);
+    }
+  }
+
+  async saveFreeModeCommit(
+    ...args: Parameters<WorldRepository["saveFreeModeCommit"]>
+  ): Promise<void> {
+    if (this.useFallback) {
+      await this.fallback.saveFreeModeCommit(...args);
+      return;
+    }
+    try {
+      await this.primary.saveFreeModeCommit(...args);
+      this.primaryReadSucceeded = true;
+    } catch (error) {
+      if (this.shouldRethrow(error)) throw error;
+      this.activateFallback();
+      await this.fallback.saveFreeModeCommit(...args);
+    }
+  }
+
+  async saveFreeModeState(
+    ...args: Parameters<WorldRepository["saveFreeModeState"]>
+  ): Promise<void> {
+    if (this.useFallback) {
+      await this.fallback.saveFreeModeState(...args);
+      return;
+    }
+    try {
+      await this.primary.saveFreeModeState(...args);
+      this.primaryReadSucceeded = true;
+    } catch (error) {
+      if (this.shouldRethrow(error)) throw error;
+      this.activateFallback();
+      await this.fallback.saveFreeModeState(...args);
     }
   }
 
@@ -120,8 +181,16 @@ class LocalStorageFallback implements WorldRepository {
     if (!this.warningAdded) {
       this.warningAdded = true;
       this.warnings.push(
-        "IndexedDB 저장에 실패해 이번 접속 동안만 로컬 월드를 유지합니다.",
+        "이 기기에 저장하지 못해 페이지를 닫으면 이번 플레이가 사라집니다.",
       );
     }
+  }
+
+  private shouldRethrow(error: unknown): boolean {
+    return (
+      this.primaryReadSucceeded ||
+      error instanceof IndexedDbUpgradeBlockedError ||
+      error instanceof FreeModeRevisionConflictError
+    );
   }
 }

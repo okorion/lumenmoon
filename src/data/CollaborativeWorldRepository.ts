@@ -1,4 +1,5 @@
 import type { LocalPlayerProgress } from "../domain/progression";
+import type { FreeModeProgress } from "../domain/freeMode";
 import type {
   MissionContribution,
   MissionInstance,
@@ -12,11 +13,19 @@ import type {
 } from "../domain/types";
 
 export const MAX_WORLD_ACTIONS_PER_COMMIT = 24;
+export const FREE_MODE_ACTIONS_PER_COMMIT = 1;
 export const MAX_WORLD_ACTION_PAYLOAD_BYTES = 32_768;
 export const MAX_NEARBY_CHUNK_RADIUS = 2;
 export const MAX_NEARBY_VERTICAL_CHUNK_RADIUS = 1;
 export const MAX_NEARBY_BLOCKS_PER_RESPONSE = 8_192;
 export const MAX_COMPLETED_MISSIONS_PER_ARCHIVE = 50;
+
+export type GameMode = "mission" | "free";
+
+export interface PlayerIdentityResult {
+  player: BlockOwner;
+  serverNow: number;
+}
 
 export interface PlayerBootstrap {
   worldId: string;
@@ -79,6 +88,38 @@ export interface WorldMutationResult {
   upsertedBlocks: VoxelBlock[];
   removedBlockIds: string[];
   progress: LocalPlayerProgress;
+  serverNow: number;
+  replayed: boolean;
+}
+
+export type FreeModeWorldAction = PlaceWorldAction | RemoveWorldAction;
+
+export interface CommitFreeModeActionsRequest {
+  worldId: string;
+  idempotencyKey: string;
+  actions: readonly FreeModeWorldAction[];
+}
+
+export interface FreeModeOverviewResult {
+  worldId: string;
+  /** 공개 프로필만 포함하며 내부 auth UID는 절대 반환하지 않는다. */
+  player: BlockOwner;
+  progress: FreeModeProgress;
+  maxInventory: number;
+  grantAmount: number;
+  grantIntervalMs: number;
+  foreignRemovalAgeMs: number;
+  nextGrantInMs: number | null;
+  produced: number;
+  serverNow: number;
+}
+
+export interface FreeModeMutationResult {
+  worldId: string;
+  idempotencyKey: string;
+  upsertedBlocks: VoxelBlock[];
+  removedBlockIds: string[];
+  progress: FreeModeProgress;
   serverNow: number;
   replayed: boolean;
 }
@@ -165,12 +206,21 @@ export interface CompletedMissionsResult {
 export interface CollaborativeWorldRepository {
   readonly mode: "local" | "online";
 
+  getPlayerIdentity(worldId: string): Promise<PlayerIdentityResult>;
   bootstrapPlayer(worldId: string): Promise<PlayerBootstrap>;
   loadNearbyBlocks(request: NearbyBlocksRequest): Promise<NearbyBlocksResult>;
+  loadNearbyFreeModeBlocks(
+    request: NearbyBlocksRequest,
+  ): Promise<NearbyBlocksResult>;
   getPublicProfiles(publicIds: readonly string[]): Promise<BlockOwner[]>;
   commitWorldActions(
     request: CommitWorldActionsRequest,
   ): Promise<WorldMutationResult>;
+  getFreeModeOverview(worldId: string): Promise<FreeModeOverviewResult>;
+  settleFreeModeInventory(worldId: string): Promise<FreeModeOverviewResult>;
+  commitFreeModeActions(
+    request: CommitFreeModeActionsRequest,
+  ): Promise<FreeModeMutationResult>;
   settleProduction(worldId: string): Promise<ProductionResult>;
   startManualProduction(
     worldId: string,

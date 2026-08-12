@@ -1,4 +1,7 @@
-import type { WorldMutationResult } from "../data/CollaborativeWorldRepository";
+import type {
+  FreeModeMutationResult,
+  WorldMutationResult,
+} from "../data/CollaborativeWorldRepository";
 import { toChunkCoordinate } from "../domain/grid";
 import type { Clock, LocalPlayerProgress } from "../domain/progression";
 import { STARTER_BAY_RESERVED_SLOT_COUNT } from "../domain/starterBay";
@@ -38,6 +41,57 @@ export class OnlineProgressGate {
   leave(): void {
     this.active = false;
   }
+}
+
+/** 실패한 자동 정산을 매 프레임/매초 반복하지 않고 명시 재시도까지 멈춘다. */
+export class ExplicitRetryGate {
+  private failed = false;
+
+  canAttempt(force = false): boolean {
+    return force || !this.failed;
+  }
+
+  recordFailure(): void {
+    this.failed = true;
+  }
+
+  recordSuccess(): void {
+    this.failed = false;
+  }
+}
+
+/** 같은 청크는 성공 여부와 관계없이 수동 재시도나 청크 이동 전까지 한 번만 요청한다. */
+export class ChunkRequestGate {
+  private key = "";
+
+  shouldRequest(key: string, force = false): boolean {
+    if (!force && key === this.key) return false;
+    this.key = key;
+    return true;
+  }
+
+  reset(): void {
+    this.key = "";
+  }
+}
+
+/**
+ * 멱등 replay는 최초 응답 시점의 delta이므로 현재 상태에 다시 적용하지
+ * 않는다. 호출자는 같은 계정의 다른 탭까지 포함한 최신 권위 상태를
+ * 재조회해야 한다.
+ */
+export async function reconcileFreeModeMutationResult(
+  result: FreeModeMutationResult,
+  handlers: {
+    apply: (value: FreeModeMutationResult) => void;
+    refresh: () => Promise<void>;
+  },
+): Promise<void> {
+  if (result.replayed) {
+    await handlers.refresh();
+    return;
+  }
+  handlers.apply(result);
 }
 
 /** DB 시각과 performance.now()를 묶어 기기 벽시계 변경과 무관한 표시용 시계를 만든다. */

@@ -26,6 +26,14 @@ function progress() {
   };
 }
 
+function freeProgress(inventory = 30) {
+  return {
+    initial_grant_claimed: true,
+    inventory,
+    last_settled_at: SERVER_NOW,
+  };
+}
+
 function block() {
   return {
     id: BLOCK_ID,
@@ -75,6 +83,38 @@ function fakeClient(options: FakeClientOptions = {}) {
 }
 
 describe("SupabaseRepository", () => {
+  it("모드 선택 전 공개 프로필만 준비한다", async () => {
+    const { client, calls } = fakeClient({
+      handlers: {
+        get_player_identity: {
+          profile: {
+            public_tag: "#A2B3",
+            nickname: "고요한 여우",
+            emblem: "✦",
+          },
+          server_now: SERVER_NOW,
+        },
+      },
+    });
+    const repository = new SupabaseRepository(client, { worldId: WORLD_ID });
+
+    const result = await repository.getPlayerIdentity(WORLD_ID);
+
+    expect(result).toEqual({
+      player: {
+        id: "#A2B3",
+        publicId: "#A2B3",
+        nickname: "고요한 여우",
+        emblem: "✦",
+      },
+      serverNow: Date.parse(SERVER_NOW),
+    });
+    expect(JSON.stringify(result)).not.toContain("internal-auth-uid");
+    expect(calls).toEqual([
+      { name: "get_player_identity", args: { p_world_id: WORLD_ID } },
+    ]);
+  });
+
   it("bootstrap 응답에서 auth UID를 제거하고 공개 신원만 반환한다", async () => {
     const { client, calls } = fakeClient({
       handlers: {
@@ -131,6 +171,98 @@ describe("SupabaseRepository", () => {
     expect(result.blockCount).toBe(0);
     expect(result.blockLimit).toBe(8_192);
     expect(result.serverNow).toBe(Date.parse(SERVER_NOW));
+  });
+
+  it("자유 모드 RPC를 별도 블록 원본과 엄격한 재고 규칙으로 매핑한다", async () => {
+    const freeBlock = { ...block(), source: "free" };
+    const overview = {
+      world_id: WORLD_ID,
+      profile: {
+        public_tag: freeBlock.creator_public_tag,
+        nickname: freeBlock.nickname_snapshot,
+        emblem: freeBlock.creator_emblem,
+      },
+      progress: freeProgress(),
+      max_inventory: 100,
+      grant_amount: 5,
+      grant_interval_ms: 3_600_000,
+      foreign_removal_age_ms: 259_200_000,
+      next_grant_in_ms: 1_800_000,
+      produced: 0,
+      server_now: SERVER_NOW,
+    };
+    const { client, calls } = fakeClient({
+      handlers: {
+        get_free_mode_overview: overview,
+        settle_free_mode_inventory: overview,
+        get_nearby_free_mode_blocks: {
+          world_id: WORLD_ID,
+          blocks: [freeBlock],
+          block_count: 1,
+          block_limit: 8_192,
+          server_now: SERVER_NOW,
+        },
+        commit_free_mode_actions: {
+          world_id: WORLD_ID,
+          idempotency_key: COMMIT_ID,
+          upserted_blocks: [freeBlock],
+          removed_block_ids: [],
+          progress: freeProgress(29),
+          server_now: SERVER_NOW,
+          replayed: false,
+        },
+      },
+    });
+    const repository = new SupabaseRepository(client, { worldId: WORLD_ID });
+
+    const first = await repository.getFreeModeOverview(WORLD_ID);
+    const settled = await repository.settleFreeModeInventory(WORLD_ID);
+    const nearby = await repository.loadNearbyFreeModeBlocks({
+      worldId: WORLD_ID,
+      chunkX: 0,
+      chunkY: 0,
+      chunkZ: 0,
+      radius: 1,
+      verticalRadius: 1,
+    });
+    const mutation = await repository.commitFreeModeActions({
+      worldId: WORLD_ID,
+      idempotencyKey: COMMIT_ID,
+      actions: [
+        {
+          type: "place",
+          blockId: BLOCK_ID,
+          position: { x: 1, y: 2, z: 3 },
+          kind: "cube",
+          rotation: 0,
+          colorIndex: 4,
+        },
+      ],
+    });
+
+    expect(first).toMatchObject({
+      maxInventory: 100,
+      grantAmount: 5,
+      grantIntervalMs: 3_600_000,
+      foreignRemovalAgeMs: 259_200_000,
+      nextGrantInMs: 1_800_000,
+    });
+    expect(settled.progress.inventory).toBe(30);
+    expect(nearby.blocks[0]?.source).toBe("free");
+    expect(mutation.progress.inventory).toBe(29);
+    expect(mutation.upsertedBlocks[0]?.source).toBe("free");
+    expect(JSON.stringify({ first, nearby, mutation })).not.toContain(
+      "internal-auth-uid",
+    );
+    expect(calls.map(({ name }) => name)).toEqual([
+      "get_free_mode_overview",
+      "settle_free_mode_inventory",
+      "get_nearby_free_mode_blocks",
+      "commit_free_mode_actions",
+    ]);
+    const action = calls[3]?.args.p_actions as Array<Record<string, unknown>>;
+    expect(action[0]).not.toHaveProperty("creator_id");
+    expect(action[0]).not.toHaveProperty("created_at");
   });
 
   it("place 요청에 제작자·구역을 보내지 않고 서버 확정 결과를 매핑한다", async () => {

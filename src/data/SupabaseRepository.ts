@@ -4,6 +4,13 @@ import {
   type User,
 } from "@supabase/supabase-js";
 import type { LocalPlayerProgress } from "../domain/progression";
+import {
+  FREE_MODE_FOREIGN_REMOVAL_AGE_MS,
+  FREE_MODE_GRANT_AMOUNT,
+  FREE_MODE_GRANT_INTERVAL_MS,
+  FREE_MODE_MAX_INVENTORY,
+  type FreeModeProgress,
+} from "../domain/freeMode";
 import type {
   MissionContribution,
   MissionContributorSummary,
@@ -27,21 +34,28 @@ import {
   RepositoryRequestError,
   type CollaborativeWorldRepository,
   type CompletedMissionsResult,
+  type CommitFreeModeActionsRequest,
   type CommitWorldActionsRequest,
   type ContributeToMissionRequest,
   type DismantleResult,
   type DismantleTicket,
+  type FreeModeMutationResult,
+  type FreeModeOverviewResult,
   type ManualProductionSession,
   type MissionContributionResult,
   type MissionOverviewResult,
   type NearbyBlocksRequest,
   type NearbyBlocksResult,
   type PlayerBootstrap,
+  type PlayerIdentityResult,
   type ProductionResult,
   type WorldAction,
   type WorldMutationResult,
 } from "./CollaborativeWorldRepository";
-import { validateCommitWorldActions } from "./worldActionValidation";
+import {
+  validateCommitFreeModeActions,
+  validateCommitWorldActions,
+} from "./worldActionValidation";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -110,6 +124,19 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
     this.requestTimeoutMs = requestTimeoutMs;
   }
 
+  async getPlayerIdentity(worldId: string): Promise<PlayerIdentityResult> {
+    this.assertWorld(worldId);
+    await this.ensureAnonymousUser();
+    const root = objectResult(
+      await this.rpc("get_player_identity", { p_world_id: worldId }),
+      "플레이어 공개 정보",
+    );
+    return {
+      player: parsePublicOwner(nestedRecord(root, ["profile", "player"], root)),
+      serverNow: requiredTimestamp(root, ["server_now"], "서버 시각"),
+    };
+  }
+
   async bootstrapPlayer(worldId: string): Promise<PlayerBootstrap> {
     this.assertWorld(worldId);
     await this.ensureAnonymousUser();
@@ -157,6 +184,23 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
     return parseNearbyBlocks(data, request.worldId);
   }
 
+  async loadNearbyFreeModeBlocks(
+    request: NearbyBlocksRequest,
+  ): Promise<NearbyBlocksResult> {
+    this.assertWorld(request.worldId);
+    validateNearbyRequest(request);
+    await this.ensureAnonymousUser();
+    const data = await this.rpc("get_nearby_free_mode_blocks", {
+      p_world_id: request.worldId,
+      p_chunk_x: request.chunkX,
+      p_chunk_y: request.chunkY,
+      p_chunk_z: request.chunkZ,
+      p_radius: request.radius,
+      p_vertical_radius: request.verticalRadius,
+    });
+    return parseNearbyBlocks(data, request.worldId, "free");
+  }
+
   async getPublicProfiles(publicIds: readonly string[]): Promise<BlockOwner[]> {
     if (publicIds.length > 64) {
       throw new RangeError("공개 프로필은 한 번에 최대 64개까지 조회할 수 있습니다.");
@@ -194,6 +238,46 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
       p_actions: request.actions.map(serializeAction),
     });
     return parseMutation(data, request.worldId, request.idempotencyKey);
+  }
+
+  async getFreeModeOverview(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    this.assertWorld(worldId);
+    await this.ensureAnonymousUser();
+    const data = await this.rpc("get_free_mode_overview", {
+      p_world_id: worldId,
+    });
+    return parseFreeModeOverview(data, worldId);
+  }
+
+  async settleFreeModeInventory(
+    worldId: string,
+  ): Promise<FreeModeOverviewResult> {
+    this.assertWorld(worldId);
+    await this.ensureAnonymousUser();
+    const data = await this.rpc("settle_free_mode_inventory", {
+      p_world_id: worldId,
+    });
+    return parseFreeModeOverview(data, worldId);
+  }
+
+  async commitFreeModeActions(
+    request: CommitFreeModeActionsRequest,
+  ): Promise<FreeModeMutationResult> {
+    this.assertWorld(request.worldId);
+    validateCommitFreeModeActions(request);
+    await this.ensureAnonymousUser();
+    const data = await this.rpc("commit_free_mode_actions", {
+      p_world_id: request.worldId,
+      p_idempotency_key: request.idempotencyKey,
+      p_actions: request.actions.map(serializeAction),
+    });
+    return parseFreeModeMutation(
+      data,
+      request.worldId,
+      request.idempotencyKey,
+    );
   }
 
   async settleProduction(worldId: string): Promise<ProductionResult> {
@@ -539,6 +623,7 @@ function parseBootstrap(data: unknown, worldId: string): PlayerBootstrap {
 function parseNearbyBlocks(
   data: unknown,
   worldId: string,
+  expectedSource?: "free",
 ): NearbyBlocksResult {
   const root = objectResult(data, "주변 블록 조회");
   const rawBlocks = requiredArray(root, ["blocks"], "블록 목록");
@@ -560,7 +645,7 @@ function parseNearbyBlocks(
     throw invalidResponse("주변 블록 응답의 개수 또는 상한이 올바르지 않습니다.");
   }
   const blocks = rawBlocks.map((item) =>
-    parseBlock(requiredRecord(item, "블록"), worldId),
+    parseBlock(requiredRecord(item, "블록"), worldId, expectedSource),
   );
   return {
     worldId: readWorldId(root, worldId),
@@ -568,6 +653,106 @@ function parseNearbyBlocks(
     blockCount,
     blockLimit,
     serverNow: requiredTimestamp(root, ["server_now"], "서버 시각"),
+  };
+}
+
+function parseFreeModeOverview(
+  data: unknown,
+  worldId: string,
+): FreeModeOverviewResult {
+  const root = objectResult(data, "자유 모드 조회");
+  const progress = parseFreeModeProgress(progressRecord(root));
+  const maxInventory = requiredPositiveSafeInteger(
+    root,
+    ["max_inventory", "maxInventory"],
+    "자유 모드 최대 재고",
+  );
+  const grantAmount = requiredPositiveSafeInteger(
+    root,
+    ["grant_amount", "grantAmount"],
+    "자유 모드 지급량",
+  );
+  const grantIntervalMs = requiredPositiveSafeInteger(
+    root,
+    ["grant_interval_ms", "grantIntervalMs"],
+    "자유 모드 지급 간격",
+  );
+  const foreignRemovalAgeMs = requiredPositiveSafeInteger(
+    root,
+    ["foreign_removal_age_ms", "foreignRemovalAgeMs"],
+    "타인 블록 보호 시간",
+  );
+  if (
+    maxInventory !== FREE_MODE_MAX_INVENTORY ||
+    grantAmount !== FREE_MODE_GRANT_AMOUNT ||
+    grantIntervalMs !== FREE_MODE_GRANT_INTERVAL_MS ||
+    foreignRemovalAgeMs !== FREE_MODE_FOREIGN_REMOVAL_AGE_MS
+  ) {
+    throw invalidResponse("자유 모드 규칙이 클라이언트 계약과 다릅니다.");
+  }
+  const nextGrantValue = valueFrom(root, [
+    "next_grant_in_ms",
+    "nextGrantInMs",
+  ]);
+  let nextGrantInMs: number | null;
+  if (nextGrantValue === null) {
+    nextGrantInMs = null;
+  } else if (
+    typeof nextGrantValue === "number" &&
+    Number.isSafeInteger(nextGrantValue) &&
+    nextGrantValue >= 0 &&
+    nextGrantValue <= FREE_MODE_GRANT_INTERVAL_MS
+  ) {
+    nextGrantInMs = nextGrantValue;
+  } else {
+    throw invalidResponse("다음 자유 모드 지급 시간 형식이 올바르지 않습니다.");
+  }
+  return {
+    worldId: readWorldId(root, worldId),
+    player: parsePublicOwner(nestedRecord(root, ["profile", "player"], root)),
+    progress,
+    maxInventory,
+    grantAmount,
+    grantIntervalMs,
+    foreignRemovalAgeMs,
+    nextGrantInMs,
+    produced: requiredNonNegativeSafeInteger(
+      root,
+      ["produced"],
+      "자유 모드 지급 수",
+    ),
+    serverNow: requiredTimestamp(root, ["server_now"], "서버 시각"),
+  };
+}
+
+function parseFreeModeMutation(
+  data: unknown,
+  worldId: string,
+  idempotencyKey: string,
+): FreeModeMutationResult {
+  const root = objectResult(data, "자유 모드 변경");
+  return {
+    worldId: readWorldId(root, worldId),
+    idempotencyKey: readIdempotencyKey(root, idempotencyKey),
+    upsertedBlocks: requiredArray(
+      root,
+      ["upserted_blocks"],
+      "확정된 자유 모드 블록",
+    ).map((item) =>
+      parseBlock(requiredRecord(item, "자유 모드 블록"), worldId, "free"),
+    ),
+    removedBlockIds: optionalArray(root, ["removed_block_ids"]).map(
+      (item) => {
+        if (typeof item !== "string") {
+          throw invalidResponse("제거된 자유 모드 블록 ID가 올바르지 않습니다.");
+        }
+        assertUuid(item, "제거된 자유 모드 블록 ID");
+        return item;
+      },
+    ),
+    progress: parseFreeModeProgress(progressRecord(root)),
+    serverNow: requiredTimestamp(root, ["server_now"], "서버 시각"),
+    replayed: optionalBoolean(root, ["replayed"], false),
   };
 }
 
@@ -876,7 +1061,11 @@ function parseMissionStage(value: number): MissionStagePercent {
   return value;
 }
 
-function parseBlock(record: JsonRecord, fallbackWorldId: string): VoxelBlock {
+function parseBlock(
+  record: JsonRecord,
+  fallbackWorldId: string,
+  expectedSource?: "free",
+): VoxelBlock {
   const positionRecord = nestedRecord(record, ["position"], record);
   const ownerRecord = nestedRecord(record, ["owner", "creator"], record);
   const publicIdValue =
@@ -913,6 +1102,10 @@ function parseBlock(record: JsonRecord, fallbackWorldId: string): VoxelBlock {
   if (colorIndex < 0 || colorIndex > 11) {
     throw invalidResponse("색상 번호가 허용 범위를 벗어났습니다.");
   }
+  const source = optionalString(record, ["source"]);
+  if (expectedSource && source !== expectedSource) {
+    throw invalidResponse("자유 모드 블록 출처가 올바르지 않습니다.");
+  }
   const block: VoxelBlock = {
     id: requiredUuid(record, ["id", "block_id"], "블록 ID"),
     worldId: readWorldId(record, fallbackWorldId),
@@ -931,6 +1124,9 @@ function parseBlock(record: JsonRecord, fallbackWorldId: string): VoxelBlock {
   if (supportId) {
     assertUuid(supportId, "지지 블록 ID");
     block.supportId = supportId;
+  }
+  if (expectedSource) {
+    block.source = expectedSource;
   }
   return block;
 }
@@ -1028,6 +1224,26 @@ function parseProgress(record: JsonRecord): LocalPlayerProgress {
   };
 }
 
+function parseFreeModeProgress(record: JsonRecord): FreeModeProgress {
+  const inventory = requiredSafeInteger(record, ["inventory"], "자유 모드 재고");
+  if (inventory < 0 || inventory > FREE_MODE_MAX_INVENTORY) {
+    throw invalidResponse("자유 모드 재고가 허용 범위를 벗어났습니다.");
+  }
+  return {
+    initialGrantClaimed: requiredBoolean(
+      record,
+      ["initial_grant_claimed", "initialGrantClaimed"],
+      "자유 모드 최초 지급 상태",
+    ),
+    inventory,
+    lastSettledAt: requiredTimestamp(
+      record,
+      ["last_settled_at", "lastSettledAt"],
+      "자유 모드 최근 정산 시각",
+    ),
+  };
+}
+
 function serializeAction(action: WorldAction): JsonRecord {
   if (action.type === "reset_onboarding") {
     return { type: action.type };
@@ -1065,6 +1281,30 @@ function validatePosition(position: GridPosition): void {
   assertSafeInteger(position.x, "블록 X");
   assertSafeInteger(position.y, "블록 Y");
   assertSafeInteger(position.z, "블록 Z");
+}
+
+function validateNearbyRequest(request: NearbyBlocksRequest): void {
+  assertSafeInteger(request.chunkX, "청크 X");
+  assertSafeInteger(request.chunkY, "청크 Y");
+  assertSafeInteger(request.chunkZ, "청크 Z");
+  if (
+    !Number.isSafeInteger(request.radius) ||
+    request.radius < 0 ||
+    request.radius > MAX_NEARBY_CHUNK_RADIUS
+  ) {
+    throw new RangeError(
+      `주변 청크 반경은 0~${MAX_NEARBY_CHUNK_RADIUS} 정수여야 합니다.`,
+    );
+  }
+  if (
+    !Number.isSafeInteger(request.verticalRadius) ||
+    request.verticalRadius < 0 ||
+    request.verticalRadius > MAX_NEARBY_VERTICAL_CHUNK_RADIUS
+  ) {
+    throw new RangeError(
+      `수직 청크 반경은 0~${MAX_NEARBY_VERTICAL_CHUNK_RADIUS} 정수여야 합니다.`,
+    );
+  }
 }
 
 function parseBlockKind(value: string): BlockKind {
