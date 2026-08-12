@@ -145,6 +145,8 @@ npm run test:e2e:online
 
 프로덕션 정적 파일은 `dist/`에 생성됩니다. 현재 데모는 [Vercel](https://lumenmoon.vercel.app/)에서 제공하며 GitHub 저장소는 private 상태를 유지할 수 있습니다.
 
+GitHub Actions의 Vercel 자동 배포는 저장소 변수 `ENABLE_VERCEL_DEPLOY=true`와 `VERCEL_TOKEN`, `VERCEL_SCOPE`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` secret을 모두 설정한 경우에만 실행됩니다. 값이 없으면 CI 검증만 수행하고 배포 job은 안전하게 건너뜁니다.
+
 ## 비용과 보안 경계
 
 - 별도 Node 서버, Edge Function, WebSocket, Realtime, 크론과 상시 폴링을 사용하지 않습니다.

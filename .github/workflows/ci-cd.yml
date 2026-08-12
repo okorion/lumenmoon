@@ -97,7 +97,7 @@ jobs:
 
   deploy-vercel:
     name: Deploy to Vercel
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && secrets.VERCEL_TOKEN != ''
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' && vars.ENABLE_VERCEL_DEPLOY == 'true'
     needs: ci
     runs-on: ubuntu-latest
     steps:
