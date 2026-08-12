@@ -213,6 +213,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       viewport: { width: 1440, height: 900 },
       storageState: bStorageState,
     });
+    configureContextTimeouts(desktopContext);
     const desktopPage = await desktopContext.newPage();
     const desktopErrors = observePageErrors(desktopPage);
     await openPlayableWorld(desktopPage);
@@ -361,6 +362,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       deviceScaleFactor: 2,
       storageState: aReconnectState,
     });
+    configureContextTimeouts(reconnectedAContext);
     const reconnectedAPage = await reconnectedAContext.newPage();
     const reconnectedErrors = observePageErrors(reconnectedAPage);
     await openPlayableWorld(reconnectedAPage);
@@ -625,6 +627,7 @@ async function createMobileContext(
     hasTouch: true,
     deviceScaleFactor: 2,
   });
+  configureContextTimeouts(context);
   await context.addInitScript(
     ({ authStorageKey, analyticsConsentKey, authSession }) => {
       localStorage.setItem(authStorageKey, JSON.stringify(authSession));
@@ -637,6 +640,11 @@ async function createMobileContext(
     },
   );
   return context;
+}
+
+function configureContextTimeouts(context: BrowserContext): void {
+  context.setDefaultTimeout(15_000);
+  context.setDefaultNavigationTimeout(30_000);
 }
 
 async function openPlayableWorld(
