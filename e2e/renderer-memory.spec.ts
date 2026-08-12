@@ -52,6 +52,10 @@ interface RendererRuntime {
 }
 
 interface RendererModule {
+  LUMEN_SURFACE_ASSET_URLS: Readonly<{
+    albedo: string;
+    normal: string;
+  }>;
   VoxelRenderer: new (
     canvas: HTMLCanvasElement,
     world: unknown,
@@ -71,6 +75,11 @@ interface ProbeSample {
   activeChunks: number;
   drawCalls: number;
   visibleBlocks: number;
+}
+
+interface WarmupSample {
+  attempt: number;
+  textures: number;
 }
 
 test("실제 WebGL 청크 왕복 뒤 GPU 자원 수가 plateau를 유지한다", async ({
@@ -147,6 +156,21 @@ test("실제 WebGL 청크 왕복 뒤 GPU 자원 수가 plateau를 유지한다",
     }
 
     const world = new worldModule.VoxelWorld(worldId, blocks);
+    const surfaceAssetUrls = Object.values(
+      rendererModule.LUMEN_SURFACE_ASSET_URLS,
+    );
+    await Promise.all(
+      surfaceAssetUrls.map(
+        (source) =>
+          new Promise<void>((resolveImage, rejectImage) => {
+            const image = new Image();
+            image.onload = () => resolveImage();
+            image.onerror = () =>
+              rejectImage(new Error(`renderer asset failed to load: ${source}`));
+            image.src = source;
+          }),
+      ),
+    );
     const renderer = new rendererModule.VoxelRenderer(canvas, world, false);
     const context = renderer.renderer.getContext();
     const contextType =
@@ -173,7 +197,39 @@ test("실제 WebGL 청크 왕복 뒤 GPU 자원 수가 plateau를 유지한다",
 
     try {
       renderer.setPlayerPose(near, 0, 0);
-      await renderSettled();
+      renderer.render();
+      context.finish();
+      const fallbackTextureCount =
+        renderer.getPerformanceSnapshot().textures;
+      const expectedTextureCount =
+        fallbackTextureCount + surfaceAssetUrls.length;
+      const warmupSamples: WarmupSample[] = [];
+      const warmupDeadline = performance.now() + 5_000;
+      let stableTextureSamples = 0;
+
+      while (stableTextureSamples < 2) {
+        await renderSettled();
+        const textureCount = renderer.getPerformanceSnapshot().textures;
+        warmupSamples.push({
+          attempt: warmupSamples.length + 1,
+          textures: textureCount,
+        });
+        if (textureCount > expectedTextureCount) {
+          throw new Error(
+            `unexpected texture allocation during warm-up: ${textureCount} > ${expectedTextureCount}`,
+          );
+        }
+        stableTextureSamples =
+          textureCount === expectedTextureCount
+            ? stableTextureSamples + 1
+            : 0;
+        if (performance.now() >= warmupDeadline) {
+          throw new Error(
+            `surface textures did not reach the expected GPU count: ${textureCount} !== ${expectedTextureCount}`,
+          );
+        }
+      }
+
       for (let cycle = 1; cycle <= 8; cycle += 1) {
         renderer.setPlayerPose(far, 0, 0);
         await renderSettled();
@@ -190,16 +246,31 @@ test("실제 WebGL 청크 왕복 뒤 GPU 자원 수가 plateau를 유지한다",
           visibleBlocks: snapshot.visibleBlockCount,
         });
       }
+      return {
+        contextType,
+        samples,
+        warmupSamples,
+        fallbackTextureCount,
+        expectedTextureCount,
+        surfaceAssetCount: surfaceAssetUrls.length,
+        disposed: true,
+      };
     } finally {
       renderer.dispose();
     }
-
-    return { contextType, samples, disposed: true };
   });
 
   expect(probe.contextType).toBe("webgl2");
   expect(probe.disposed).toBe(true);
   expect(probe.samples).toHaveLength(8);
+  expect(probe.surfaceAssetCount).toBe(2);
+  expect(probe.expectedTextureCount).toBe(
+    probe.fallbackTextureCount + probe.surfaceAssetCount,
+  );
+  expect(probe.warmupSamples.length).toBeGreaterThanOrEqual(2);
+  expect(probe.warmupSamples.at(-1)?.textures).toBe(
+    probe.expectedTextureCount,
+  );
   const first = probe.samples[0];
   expect(first).toBeDefined();
   expect(first!.geometries).toBeGreaterThan(0);
@@ -235,6 +306,11 @@ test("실제 WebGL 청크 왕복 뒤 GPU 자원 수가 plateau를 유지한다",
           "Playwright headless Edge WebGL2 on the Vite development server; Three.js GPU resource counters only, not JavaScript heap or a physical-device benchmark",
         cycles: probe.samples.length,
         fixture: "six X chunks with cube, stair, and light blocks",
+        warmup:
+          "the two moonstone surface images must load and add exactly two GPU textures before the eight measured chunk cycles",
+        fallbackTextureCount: probe.fallbackTextureCount,
+        expectedTextureCount: probe.expectedTextureCount,
+        warmupSamples: probe.warmupSamples,
         browserErrors,
         samples: probe.samples,
         disposed: probe.disposed,

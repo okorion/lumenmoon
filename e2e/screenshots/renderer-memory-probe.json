@@ -2,6 +2,23 @@
   "measurement": "Playwright headless Edge WebGL2 on the Vite development server; Three.js GPU resource counters only, not JavaScript heap or a physical-device benchmark",
   "cycles": 8,
   "fixture": "six X chunks with cube, stair, and light blocks",
+  "warmup": "the two moonstone surface images must load and add exactly two GPU textures before the eight measured chunk cycles",
+  "fallbackTextureCount": 5,
+  "expectedTextureCount": 7,
+  "warmupSamples": [
+    {
+      "attempt": 1,
+      "textures": 5
+    },
+    {
+      "attempt": 2,
+      "textures": 7
+    },
+    {
+      "attempt": 3,
+      "textures": 7
+    }
+  ],
   "browserErrors": {
     "console": [],
     "page": 0,
