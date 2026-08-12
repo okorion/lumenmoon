@@ -1,0 +1,44 @@
+{
+  "measurement": "Playwright headless Edge WebGL2 on the Vite development server; not a physical-device FPS benchmark",
+  "desktop": {
+    "framesPerSecond": 112.09979101337326,
+    "drawCalls": 22,
+    "triangles": 5062,
+    "visibleBlockCount": 786,
+    "activeChunkCount": 6,
+    "sceneObjectCount": 40,
+    "geometries": 11,
+    "textures": 7,
+    "pixelRatio": 1,
+    "pixelSmoke": {
+      "sampleCount": 26574,
+      "meanLuminance": 0.22007193665634664,
+      "luminanceDeviation": 0.15212310042571475,
+      "visiblePixelRatio": 1,
+      "highlightedPixelRatio": 0.565778580567472,
+      "chromaticPixelRatio": 0.9993979077293595,
+      "quantizedColorCount": 191
+    }
+  },
+  "mobile": {
+    "framesPerSecond": 135.44730564769637,
+    "drawCalls": 20,
+    "triangles": 4428,
+    "visibleBlockCount": 733,
+    "activeChunkCount": 4,
+    "sceneObjectCount": 36,
+    "geometries": 9,
+    "textures": 7,
+    "pixelRatio": 1,
+    "pixelSmoke": {
+      "sampleCount": 36660,
+      "meanLuminance": 0.1988218808339641,
+      "luminanceDeviation": 0.1332383582873559,
+      "visiblePixelRatio": 1,
+      "highlightedPixelRatio": 0.5131478450627387,
+      "chromaticPixelRatio": 1,
+      "quantizedColorCount": 141
+    }
+  },
+  "assetBudgetBytes": 20860
+}
