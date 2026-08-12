@@ -45,7 +45,7 @@ body,
   overflow: hidden;
   overflow: clip;
   overscroll-behavior: none;
-  touch-action: none;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 html,
@@ -80,12 +80,17 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
+input[type="range"]:focus-visible,
+#game-canvas:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+
 .game-shell,
 #game-canvas {
   position: relative;
   width: 100%;
   height: 100%;
-  touch-action: none;
 }
 
 .game-shell {
@@ -95,6 +100,7 @@ button:focus-visible {
   overflow: hidden;
   overflow: clip;
   contain: strict;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 #game-canvas {
@@ -946,7 +952,8 @@ button:focus-visible {
 
 .recovery-notice {
   position: absolute;
-  z-index: 72;
+  /* 모드 최초 진입 실패도 start overlay 뒤에 가려지지 않아야 한다. */
+  z-index: 82;
   top: calc(max(10px, env(safe-area-inset-top)) + 58px);
   left: 50%;
   display: flex;
@@ -1045,7 +1052,10 @@ button:focus-visible {
   border-radius: 13px;
   color: var(--ink);
   font-size: 12px;
+  overflow-wrap: break-word;
+  text-align: center;
   transform: translateX(-50%);
+  word-break: keep-all;
   animation: toast-in 180ms ease-out;
 }
 
@@ -1066,6 +1076,7 @@ button:focus-visible {
   transition:
     opacity 220ms ease,
     visibility 220ms ease;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .mission-archive-overlay {
@@ -1076,7 +1087,7 @@ button:focus-visible {
     radial-gradient(circle at 50% 20%, rgba(103, 201, 179, 0.13), transparent 34%),
     rgba(5, 9, 17, 0.88);
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .analytics-settings-overlay {
@@ -1086,7 +1097,7 @@ button:focus-visible {
     radial-gradient(circle at 50% 16%, rgba(120, 240, 198, 0.12), transparent 34%),
     rgba(5, 9, 17, 0.9);
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .analytics-settings-shell {
@@ -1139,12 +1150,101 @@ button:focus-visible {
   -webkit-user-select: text;
 }
 
+.sound-settings-section,
 .analytics-consent-section,
 .analytics-privacy-notice {
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.045);
+}
+
+.sound-settings-section {
+  margin-bottom: 12px;
+}
+
+.sound-settings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sound-settings-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.sound-settings-heading p {
+  margin: 7px 0 0;
+  color: var(--mint);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.sound-settings-heading p[data-enabled="false"] {
+  color: var(--muted);
+}
+
+.sound-toggle-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.sound-toggle-actions .ui-button {
+  min-width: 78px;
+  min-height: 44px;
+}
+
+.sound-levels {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.sound-level {
+  display: grid;
+  min-width: 0;
+  min-height: 44px;
+  grid-template-columns: 86px minmax(90px, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-level label {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.sound-level input[type="range"] {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--mint);
+  cursor: pointer;
+  touch-action: pan-x;
+}
+
+.sound-level output {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.sound-settings-section.is-muted .sound-level {
+  color: var(--muted);
+}
+
+.sound-settings-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .analytics-consent-heading h3,
@@ -1523,7 +1623,7 @@ button:focus-visible {
 .start-card > small {
   display: block;
   margin-top: 15px;
-  color: rgba(231, 242, 255, 0.45);
+  color: rgba(231, 242, 255, 0.72);
   font-size: 9px;
 }
 
@@ -1810,9 +1910,25 @@ button:focus-visible {
     padding-top: 12px;
   }
 
+  .sound-settings-section,
   .analytics-consent-section,
   .analytics-privacy-notice {
     padding: 13px;
+  }
+
+  .sound-settings-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sound-toggle-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sound-level {
+    grid-template-columns: 78px minmax(72px, 1fr) 38px;
+    gap: 7px;
   }
 
   .analytics-consent-choices {
@@ -2190,6 +2306,73 @@ button:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --ink: CanvasText;
+    --muted: CanvasText;
+    --mint: Highlight;
+    --line: CanvasText;
+  }
+
+  .glass,
+  .start-overlay,
+  .fatal-overlay,
+  .mission-archive-overlay,
+  .analytics-settings-overlay,
+  .start-card,
+  .fatal-card,
+  .mission-archive-shell,
+  .analytics-settings-shell,
+  .sound-settings-section,
+  .analytics-consent-section,
+  .analytics-privacy-notice {
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+    background: Canvas !important;
+    box-shadow: none !important;
+  }
+
+  button,
+  input,
+  .game-mode-choice,
+  .analytics-consent-choice {
+    border: 1px solid ButtonText !important;
+    color: ButtonText !important;
+    background: ButtonFace !important;
+    box-shadow: none !important;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  .game-mode-choice:has(input:focus-visible) {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px;
+  }
+
+  .ui-button.is-selected,
+  .game-mode-choice:has(input:checked),
+  .analytics-consent-choice:has(input:checked) {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+
+  .mission-progress,
+  .removal-hold {
+    border: 1px solid CanvasText;
+  }
+
+  .mission-progress i,
+  .removal-hold i {
+    background: Highlight !important;
+  }
+
+  .palette-toggle i,
+  .color-button::after {
+    forced-color-adjust: none;
+    border: 2px solid CanvasText;
   }
 }
 
@@ -4338,5 +4521,340 @@ button.ui-button:not(:disabled):active {
 
   .build-tray .palette-row {
     grid-template-columns: repeat(6, 44px);
+  }
+}
+
+/* Game mode choice and free-building HUD -------------------------------- */
+.game-shell:not(.is-world-entered) .profile-status-panel,
+.game-shell:not(.is-world-entered) .floating-settings,
+.game-shell:not(.is-world-entered) .mission-panel,
+.game-shell:not(.is-world-entered) .owner-tooltip,
+.game-shell:not(.is-world-entered) .build-tray,
+.game-shell:not(.is-world-entered) .mobile-controls,
+.game-shell:not(.is-world-entered) .performance-hud {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.game-shell:not(.is-world-entered) .profile-status-panel > .brand-panel {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.game-mode-picker {
+  display: grid;
+  width: 100%;
+  max-width: 480px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 auto 14px;
+  padding: 0;
+  border: 0;
+}
+
+.game-mode-choice {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 82px;
+  align-items: stretch;
+  border: 1px solid rgba(219, 237, 255, 0.14);
+  border-radius: 15px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.game-mode-choice > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game-mode-choice > span {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: inherit;
+}
+
+.game-mode-choice strong {
+  color: #f7fbff;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.game-mode-choice small,
+.game-mode-choice em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.game-mode-choice em {
+  color: rgba(169, 230, 210, 0.78);
+  font-size: 8px;
+}
+
+.game-mode-choice:has(input:checked) {
+  border-color: rgba(120, 240, 198, 0.68);
+  background: linear-gradient(
+    145deg,
+    rgba(120, 240, 198, 0.16),
+    rgba(139, 181, 255, 0.08)
+  );
+  box-shadow: inset 0 0 0 1px rgba(120, 240, 198, 0.08);
+}
+
+.game-mode-choice:has(input:focus-visible) {
+  outline: 2px solid #d7e7a1;
+  outline-offset: 2px;
+}
+
+.game-mode-picker:disabled .game-mode-choice {
+  opacity: 0.52;
+  cursor: wait;
+}
+
+.free-mode-details:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.free-mode-details > span {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid rgba(219, 237, 255, 0.09);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.free-mode-details small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.free-mode-details strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-shell[data-game-mode="free"] .mission-panel,
+.game-shell[data-game-mode="free"] .mission-archive-overlay,
+.game-shell[data-game-mode="free"] .world-status-row,
+.game-shell[data-game-mode="free"] .progress-grid,
+.game-shell[data-game-mode="free"] .production-status,
+.game-shell[data-game-mode="free"] .hud-actions,
+.game-shell[data-game-mode="free"] .manual-stage,
+.game-shell[data-game-mode="free"] .shortcut-guide {
+  display: none !important;
+}
+
+.game-shell[data-game-mode="free"]
+  .world-panel:not(.is-expanded)
+  .free-mode-details {
+  display: none;
+}
+
+.game-shell[data-game-mode="mission"] .free-mode-details {
+  display: none !important;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .start-overlay {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .start-card {
+    max-height: calc(
+      100dvh - max(8px, env(safe-area-inset-top)) -
+        max(8px, env(safe-area-inset-bottom))
+    );
+    overflow: hidden;
+  }
+
+  .game-mode-choice {
+    min-height: 72px;
+  }
+
+  .game-mode-choice > span {
+    padding: 8px 10px;
+  }
+
+  .game-shell[data-game-mode="free"] .world-panel.is-expanded {
+    max-height: calc(100dvh - 16px);
+    overflow: hidden;
+    touch-action: none;
+  }
+}
+
+@media (max-width: 300px) {
+  .start-overlay,
+  .analytics-settings-overlay,
+  .mission-archive-overlay,
+  .fatal-overlay {
+    place-items: start center;
+    padding: max(6px, env(safe-area-inset-top))
+      max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .start-card {
+    max-height: none;
+    padding: 18px 12px;
+    overflow: visible;
+  }
+
+  .start-card h1 {
+    margin-block: 10px 8px;
+    font-size: 28px;
+  }
+
+  .game-mode-picker,
+  .free-mode-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .analytics-settings-shell,
+  .mission-archive-shell,
+  .fatal-card {
+    width: 100%;
+    max-height: none;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .analytics-settings-shell > header,
+  .mission-archive-shell > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analytics-settings-shell > header > button,
+  .mission-archive-shell > header > button {
+    width: 100%;
+  }
+
+  .analytics-settings-content,
+  .mission-archive-content {
+    overflow: visible;
+  }
+
+  .sound-settings-section,
+  .analytics-consent-section,
+  .analytics-privacy-notice {
+    padding: 10px;
+  }
+
+  .sound-toggle-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sound-toggle-actions .ui-button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sound-level {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    padding-block: 3px;
+  }
+
+  .sound-level label {
+    grid-column: 1 / -1;
+  }
+
+  .sound-level input[type="range"] {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+  .game-mode-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .game-mode-choice {
+    min-height: 62px;
+  }
+
+  .game-mode-choice > span {
+    gap: 2px;
+    padding: 7px 10px;
+  }
+
+  .start-card #start-button.ui-button {
+    width: 100%;
+  }
+}
+
+@media (max-height: 520px) {
+  .game-mode-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 8px;
+  }
+
+  .game-mode-choice {
+    min-height: 64px;
+  }
+
+  .game-mode-choice em,
+  .start-card > small {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) and (max-height: 560px) and (orientation: portrait) {
+  .start-card .eyebrow,
+  .start-card > small {
+    display: none;
+  }
+
+  .start-card h1 {
+    margin: 4px 0 6px;
+    font-size: 24px;
+  }
+
+  .start-card p {
+    margin-bottom: 7px;
+    line-height: 1.35;
+  }
+
+  .game-mode-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-mode-choice {
+    min-height: 56px;
   }
 }

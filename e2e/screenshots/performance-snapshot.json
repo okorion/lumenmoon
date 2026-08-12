@@ -1,18 +1,18 @@
 {
   "measurement": "Playwright headless Edge on the development server; not a physical-device benchmark",
   "mobile": {
-    "fps": 66,
+    "fps": 70,
     "drawCalls": 18,
-    "visibleBlocks": 517,
-    "activeChunks": 8,
+    "visibleBlocks": 360,
+    "activeChunks": 7,
     "pixelRatio": 1.25,
     "viewport": "844x390"
   },
   "desktop": {
-    "fps": 93,
-    "drawCalls": 9,
-    "visibleBlocks": 1318,
-    "activeChunks": 22,
+    "fps": 62,
+    "drawCalls": 34,
+    "visibleBlocks": 1278,
+    "activeChunks": 21,
     "pixelRatio": 1,
     "viewport": "1440x900"
   }

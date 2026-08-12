@@ -233,7 +233,7 @@ export function creatorCrestSvg(
 export function creatorCrestLabel(
   identity: Readonly<CreatorCrestIdentity>,
 ): string {
-  return `${identity.nickname} ${identity.publicId} 제작자 표식, ${emblemLabel(identity.emblem)}`;
+  return `${identity.nickname} ${identity.publicId}의 ${emblemLabel(identity.emblem)}`;
 }
 
 export function setCreatorCrest(

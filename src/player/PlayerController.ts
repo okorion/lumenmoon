@@ -22,10 +22,18 @@ export class PlayerController {
 
   constructor(
     private readonly collisionSource: CollisionSource,
-    private readonly spawn: Vector3Like,
+    private spawn: Vector3Like,
   ) {
     this.position = { ...spawn };
     this.respawn();
+  }
+
+  /** 모드가 권위적인 시작 위치를 늦게 받는 경우 spawn과 위치를 함께 갱신한다. */
+  setSpawn(spawn: Vector3Like, respawn = false): void {
+    this.spawn = { ...spawn };
+    if (respawn) {
+      this.respawn();
+    }
   }
 
   update(deltaSeconds: number, input: InputFrame): void {
@@ -81,6 +89,10 @@ export class PlayerController {
       y: this.position.y + PLAYER_EYE_HEIGHT,
       z: this.position.z,
     };
+  }
+
+  get isGrounded(): boolean {
+    return this.grounded;
   }
 
   respawn(): void {

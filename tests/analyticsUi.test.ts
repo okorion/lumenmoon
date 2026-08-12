@@ -9,9 +9,9 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("분석 동의 UI", () => {
   it.each<[AnalyticsConsentChoice, string]>([
-    ["undecided", "선택 전 · 통계를 보내지 않아요"],
-    ["allowed", "익명 이용 통계 허용됨"],
-    ["essential_only", "필수 데이터만 · 익명 통계 꺼짐"],
+    ["undecided", "선택 전 · 보내지 않아요"],
+    ["allowed", "익명 이용 정보 보내는 중"],
+    ["essential_only", "게임 개선 정보 보내지 않음"],
   ])("%s 선택 상태를 명확하게 표시한다", (choice, expected) => {
     expect(analyticsConsentLabel(choice)).toBe(expected);
   });

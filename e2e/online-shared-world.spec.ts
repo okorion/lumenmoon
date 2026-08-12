@@ -40,6 +40,11 @@ interface Actor {
   session: Session;
 }
 
+interface IdentityActor {
+  repository: SupabaseRepository;
+  session: Session;
+}
+
 test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test.skip(
     !SUPABASE_ANON_KEY,
@@ -351,7 +356,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       "data-emblem",
       actorA.bootstrap.player.emblem,
     );
-    await expect(archiveCard).toContainText("1칸");
+    await expect(archiveCard).toContainText("1개");
     await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "archive-mobile-844x390.png"),
       fullPage: true,
@@ -389,7 +394,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       reconnectedAPage.locator(".mission-archive-card").filter({
         hasText: actorA.bootstrap.player.publicId,
       }),
-    ).toContainText("1칸");
+    ).toContainText("1개");
 
     const reconnectedBootstrap = await actorA.repository.bootstrapPlayer(WORLD_ID);
     expect(reconnectedBootstrap.baySlotIndex).toBe(
@@ -418,6 +423,117 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     await reconnectedAContext.close();
     await bContext.close();
   });
+
+  test("자유 건축은 첫 30개와 설치·회수·재접속 상태를 유지한다", async ({
+    browser,
+  }) => {
+    await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
+    await waitForSupabaseReady(requiredAnonKey());
+    const actor = await createIdentityActor(requiredAnonKey());
+    const context = await createMobileContext(browser, actor.session);
+    const page = await context.newPage();
+    const errors = observePageErrors(page);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('input[name="game-mode"][value="free"]'),
+    ).toBeChecked();
+    await page.locator("#start-button").click();
+    await expect(page.locator(".start-overlay")).toBeHidden();
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+
+    await aimMobileCameraAtGround(context, page);
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+    await expect(page.locator(".toast")).toContainText(
+      "시작 지점과 광장으로 가는 길은 비워 두고",
+    );
+
+    // 슬롯 0은 중앙을 바라본다. 왼쪽+앞으로 움직여 스폰 발판과
+    // 내 자리 발판의 경계를 건너, 보호 통로 밖의 넓은 +X 바닥에 선다.
+    await moveMobilePlayer(context, page, { x: -0.25, y: -0.18 }, 850, 31);
+    await aimMobileCameraAtGround(context, page);
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    const placed = await actor.repository.getFreeModeOverview(WORLD_ID);
+    expect(placed.progress.inventory).toBe(29);
+
+    await page.locator("#remove-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+    expect(
+      (await actor.repository.getFreeModeOverview(WORLD_ID)).progress.inventory,
+    ).toBe(30);
+
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+
+    const [ownerIdentity, visitor] = await Promise.all([
+      actor.repository.getPlayerIdentity(WORLD_ID),
+      createIdentityActor(requiredAnonKey()),
+    ]);
+    await visitor.repository.getFreeModeOverview(WORLD_ID);
+    const spawn = createStarterBayLayout(0).safeSpawn;
+    const nearbyForVisitor = await visitor.repository.loadNearbyFreeModeBlocks({
+      worldId: WORLD_ID,
+      chunkX: Math.floor(spawn.x / 16),
+      chunkY: Math.floor(spawn.y / 16),
+      chunkZ: Math.floor(spawn.z / 16),
+      radius: 2,
+      verticalRadius: 1,
+    });
+    const sharedBlock = nearbyForVisitor.blocks.find(
+      ({ owner }) => owner.publicId === ownerIdentity.player.publicId,
+    );
+    expect(sharedBlock).toBeDefined();
+    await expect(
+      visitor.repository.commitFreeModeActions({
+        worldId: WORLD_ID,
+        idempotencyKey: crypto.randomUUID(),
+        actions: [{ type: "remove", blockId: sharedBlock!.id }],
+      }),
+    ).rejects.toMatchObject({ code: "P0004" });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('input[name="game-mode"][value="free"]'),
+    ).toBeChecked();
+    await page.locator("#start-button").click();
+    await expect(page.locator(".start-overlay")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await assertMinimalMobileHud(page);
+    await assertMobileLayout(page);
+    await hideDevelopmentPerformanceHud(page);
+    await page.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "free-mode-mobile-844x390.png"),
+      fullPage: true,
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.matchMedia("(orientation: portrait)").matches,
+        ),
+      )
+      .toBe(true);
+    await page.waitForTimeout(100);
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    await expect(page.locator("#world-panel-toggle")).toBeVisible();
+    await expect(page.locator("#analytics-settings-button")).toBeVisible();
+    await expect(page.locator(".build-tray")).toBeVisible();
+    await assertMinimalMobileHud(page);
+    await assertMobileLayout(page);
+    await page.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "free-mode-mobile-390x844.png"),
+      fullPage: true,
+    });
+
+    expect(errors).toEqual([]);
+    await context.close();
+  });
 });
 
 async function createActor(anonKey: string): Promise<Actor> {
@@ -437,6 +553,25 @@ async function createActor(anonKey: string): Promise<Actor> {
     });
   }
   return { client, repository, bootstrap, session: data.session };
+}
+
+async function createIdentityActor(anonKey: string): Promise<IdentityActor> {
+  const client = createClient(SUPABASE_URL, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  const repository = new SupabaseRepository(client, { worldId: WORLD_ID });
+  await repository.getPlayerIdentity(WORLD_ID);
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) {
+    throw new Error("익명 사용자 세션을 가져오지 못했습니다.", {
+      cause: error ?? undefined,
+    });
+  }
+  return { repository, session: data.session };
 }
 
 async function createReadyActor(anonKey: string): Promise<Actor> {
@@ -530,7 +665,13 @@ async function openPlayableWorld(
   if (navigate) {
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
-  await expect(page.locator("#world-mode")).toHaveText("ONLINE WORLD · 01");
+  await expect(page.locator("#world-mode")).toHaveText("함께");
+  await page
+    .locator('.game-mode-choice:has(input[value="mission"])')
+    .click();
+  await expect(
+    page.locator('input[name="game-mode"][value="mission"]'),
+  ).toBeChecked();
   await expect(page.locator("#start-button")).toBeVisible();
   await page.locator("#start-button").click();
   await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u);
@@ -566,7 +707,7 @@ async function verifyCreatorDiscovery(
   await expect(light).toBeVisible();
   await expect(light).toContainText(creator.player.nickname);
   await expect(light).toContainText(creator.player.publicId);
-  await expect(light).toContainText("1칸");
+  await expect(light).toContainText("1개");
   await expect(light.locator("[data-emblem]").first()).toHaveAttribute(
     "data-emblem",
     creator.player.emblem,
@@ -610,7 +751,7 @@ async function expectCreatorCard(
     creator.player.nickname,
   );
   await expect(page.locator("#owner-tooltip-date")).not.toHaveText(
-    "설치일 미상",
+    "놓은 날짜 정보 없음",
   );
   await expect(page.locator("#owner-tooltip-date")).toHaveAttribute(
     "datetime",
@@ -1254,7 +1395,7 @@ async function assertContextLossRecovery(page: Page): Promise<void> {
   });
   await expect(page.locator("#fatal-overlay")).toBeVisible();
   await expect(page.locator("#fatal-title")).toHaveText(
-    "3D 화면 연결이 끊겼습니다",
+    "3D 화면이 멈췄어요",
   );
   await expect
     .poll(() => page.evaluate(() => document.pointerLockElement === null))
@@ -1416,6 +1557,81 @@ async function exerciseConcurrentMobileControls(
   expect(jumpDown?.defaultPrevented).toBe(true);
   expect(joystickMove?.pointerId).not.toBe(lookMove?.pointerId);
   expect(jumpDown?.joystickTransform).not.toBe("translate(0px, 0px)");
+}
+
+async function aimMobileCameraAtGround(
+  context: BrowserContext,
+  page: Page,
+): Promise<void> {
+  const look = await requiredBox(page, "#look-zone");
+  const start = {
+    x: look.x + look.width * 0.55,
+    y: look.y + look.height * 0.32,
+    id: 21,
+  };
+  const moved = { ...start, y: start.y + Math.min(140, look.height * 0.35) };
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [start],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [moved],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await page.waitForTimeout(100);
+  } finally {
+    await session.detach();
+  }
+}
+
+async function moveMobilePlayer(
+  context: BrowserContext,
+  page: Page,
+  direction: { x: number; y: number },
+  durationMs: number,
+  pointerId: number,
+): Promise<void> {
+  const joystick = await requiredBox(page, "#joystick");
+  const start = {
+    x: joystick.x + joystick.width / 2,
+    y: joystick.y + joystick.height / 2,
+    id: pointerId,
+  };
+  const moved = {
+    ...start,
+    x: start.x + joystick.width * direction.x,
+    y: start.y + joystick.height * direction.y,
+  };
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [start],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [moved],
+    });
+    await expect
+      .poll(() =>
+        page.locator("#joystick-knob").evaluate((element) => element.style.transform),
+      )
+      .not.toBe("translate(0px, 0px)");
+    await page.waitForTimeout(durationMs);
+  } finally {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await session.detach();
+  }
+  await page.waitForTimeout(100);
 }
 
 async function readPerformanceSnapshot(page: Page): Promise<{
