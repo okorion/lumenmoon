@@ -144,10 +144,6 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-844x390.png"),
       fullPage: true,
     });
-    await bPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-844x390.png"),
-      fullPage: true,
-    });
 
     // 같은 모바일 문서를 회전·축소하며 검사한다. 각 크기마다 WebGL 월드를
     // 다시 부팅하면 저성능 CI에서 레이아웃 검증보다 초기화 비용이 커진다.
@@ -167,10 +163,6 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-390x844.png"),
       fullPage: true,
     });
-    await bPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-390x844.png"),
-      fullPage: true,
-    });
 
     await setMobileViewport(bPage, 390, 667);
     await expectOnboardingHud(bPage, 2);
@@ -187,12 +179,6 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     await exerciseWorldPanelDisclosure(bPage);
     await exercisePaletteDisclosure(bPage);
     await exerciseMissionPanelDisclosure(bPage);
-    await hideDevelopmentPerformanceHud(bPage);
-    await bPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-360x640.png"),
-      fullPage: true,
-    });
-
     // 각 크기의 중립 HUD 캡처를 먼저 고정한 뒤 제작자 상세을 검증한다.
     // 작은 화면부터 가로로 돌아오므로 다음 기록관 흐름도 844×390을 유지한다.
     for (const [width, height] of [
@@ -204,6 +190,21 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       await setMobileViewport(bPage, width, height);
       await verifyCreatorDiscovery(bPage, actorA.bootstrap);
       await assertMobileLayout(bPage);
+      const screenshotName =
+        width === 360
+          ? "shared-world-mobile-360x640.png"
+          : height === 844
+            ? "shared-world-mobile-390x844.png"
+            : width === 844
+              ? "shared-world-mobile-844x390.png"
+              : null;
+      if (screenshotName) {
+        await hideDevelopmentPerformanceHud(bPage);
+        await bPage.screenshot({
+          path: resolve(SCREENSHOT_DIRECTORY, screenshotName),
+          fullPage: true,
+        });
+      }
     }
 
     const bStorageState = await bContext.storageState();
