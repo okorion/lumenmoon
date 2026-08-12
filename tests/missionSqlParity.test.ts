@@ -20,7 +20,7 @@ describe("Local/SQL 루멘문 계약", () => {
     expect(SQL).toContain(
       `array[${getMissionPalette(0).join(", ")}]::smallint[]`,
     );
-    expect(SQL).toMatch(/'루멘문',\s*24,\s*array\[[^\]]+\]::smallint\[\],\s*7/u);
+    expect(SQL).toMatch(/'별빛 관문',\s*24,\s*array\[[^\]]+\]::smallint\[\],\s*7/u);
   });
 
   it("24개 정규 슬롯의 좌표·종류·회전이 같다", () => {

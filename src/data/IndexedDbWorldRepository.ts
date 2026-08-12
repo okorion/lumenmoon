@@ -2,7 +2,7 @@ import type { WorldSnapshot } from "../domain/types";
 import { preserveLocalMissionState } from "../domain/mission";
 import type { WorldRepository } from "./WorldRepository";
 
-const DATABASE_NAME = "one-more-block";
+const DATABASE_NAME = "lumenmoon";
 const DATABASE_VERSION = 1;
 const WORLD_STORE = "worlds";
 

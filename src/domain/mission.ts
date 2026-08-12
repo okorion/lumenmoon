@@ -7,7 +7,7 @@ import type {
 } from "./types";
 
 export const STARLIGHT_GATE_TEMPLATE_KEY = "starlight-gate";
-export const STARLIGHT_GATE_NAME = "루멘문";
+export const STARLIGHT_GATE_NAME = "별빛 관문";
 export const MISSION_CANONICAL_SLOT_COUNT = 24;
 export const MISSION_RECOMMENDATION_LIMIT = 3;
 export const MISSION_RECENT_CONTRIBUTION_LIMIT = 8;
@@ -38,6 +38,28 @@ export function selectMissionRenderWindow<
 }
 
 export type MissionStagePercent = 0 | 25 | 50 | 75 | 100;
+export type MissionGlowPercent =
+  | 0
+  | 5
+  | 10
+  | 15
+  | 20
+  | 25
+  | 30
+  | 35
+  | 40
+  | 45
+  | 50
+  | 55
+  | 60
+  | 65
+  | 70
+  | 75
+  | 80
+  | 85
+  | 90
+  | 95
+  | 100;
 export type MissionStatus = "active" | "completed";
 
 export interface MissionTemplateSlot {
@@ -243,6 +265,26 @@ export function missionStageFromFilledSlots(
   if (filledSlots >= 12) return 50;
   if (filledSlots >= 6) return 25;
   return 0;
+}
+
+/**
+ * 구조 변화(25/50/75/100)와 별개로, 첫 기여부터 5% 단위의 빛 보상을 준다.
+ * 100% 발광은 마지막 정규 슬롯이 확정된 뒤에만 허용한다.
+ */
+export function missionGlowFromFilledSlots(
+  filledSlots: number,
+  totalSlots = MISSION_CANONICAL_SLOT_COUNT,
+): MissionGlowPercent {
+  if (!Number.isSafeInteger(filledSlots) || filledSlots < 0) {
+    throw new RangeError("확정 슬롯 수는 0 이상의 안전한 정수여야 합니다.");
+  }
+  if (!Number.isSafeInteger(totalSlots) || totalSlots < 1) {
+    throw new RangeError("전체 슬롯 수는 1 이상의 안전한 정수여야 합니다.");
+  }
+  if (filledSlots === 0) return 0;
+  if (filledSlots >= totalSlots) return 100;
+  const rounded = Math.ceil(((filledSlots / totalSlots) * 100) / 5) * 5;
+  return Math.min(95, rounded) as MissionGlowPercent;
 }
 
 export function createStarlightGateInstance(

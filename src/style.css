@@ -21,10 +21,25 @@ body,
 #app {
   width: 100%;
   height: 100%;
+  min-height: 100%;
   margin: 0;
   overflow: hidden;
+  overflow: clip;
   overscroll-behavior: none;
   touch-action: none;
+}
+
+html,
+body {
+  position: fixed;
+  inset: 0;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+  max-height: 100dvh;
 }
 
 body {
@@ -52,6 +67,15 @@ button:focus-visible {
   width: 100%;
   height: 100%;
   touch-action: none;
+}
+
+.game-shell {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  overflow: hidden;
+  overflow: clip;
+  contain: strict;
 }
 
 #game-canvas {
@@ -2173,5 +2197,568 @@ button:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Minimal HUD ------------------------------------------------------------ */
+
+.world-panel {
+  width: auto;
+  max-width: calc(100vw - 36px);
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+}
+
+.world-panel-toggle,
+.mission-panel-toggle,
+.palette-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.07);
+  cursor: pointer;
+}
+
+.world-panel-toggle {
+  order: 2;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.world-panel.is-expanded .world-panel-toggle,
+.mission-panel:not(.is-collapsed) .mission-panel-toggle {
+  color: var(--mint);
+  transform: rotate(180deg);
+}
+
+.world-panel .progress-grid {
+  order: 1;
+  grid-template-columns: repeat(4, auto);
+  gap: 3px;
+}
+
+.world-panel .progress-grid > span {
+  min-width: 42px;
+  min-height: 38px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+
+.world-panel .progress-grid small {
+  display: none;
+}
+
+.world-panel .progress-grid strong {
+  max-width: 46px;
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  color: #f4d27e;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.status-icon-block {
+  color: var(--mint);
+  filter: drop-shadow(0 0 5px rgba(120, 240, 198, 0.5));
+}
+
+.world-panel:not(.is-expanded) .world-status-row,
+.world-panel:not(.is-expanded) .production-status,
+.world-panel:not(.is-expanded) .hud-actions,
+.world-panel:not(.is-expanded) .shortcut-guide {
+  display: none;
+}
+
+.world-panel.is-expanded {
+  width: min(320px, calc(100vw - 36px));
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 12px;
+}
+
+.world-panel.is-expanded .world-panel-toggle {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+}
+
+.world-panel.is-expanded .world-status-row {
+  min-height: 38px;
+  padding-right: 42px;
+}
+
+.world-panel.is-expanded .progress-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.world-panel.is-expanded .progress-grid > span {
+  min-width: 0;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.world-panel.is-expanded .progress-grid small {
+  display: block;
+}
+
+.shortcut-guide {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+}
+
+.shortcut-guide > div {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.shortcut-guide dt,
+.shortcut-guide dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 8px;
+}
+
+.shortcut-guide dt {
+  color: var(--mint);
+  font-weight: 700;
+}
+
+.mission-panel {
+  display: flex;
+  max-height: calc(100dvh - 180px);
+  flex-direction: column;
+  overflow: hidden;
+  touch-action: none;
+}
+
+.mission-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mission-panel-toggle {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+}
+
+.mission-panel.is-collapsed {
+  width: min(258px, calc(100vw - 36px));
+  max-height: none;
+  padding: 10px 11px;
+}
+
+.mission-panel.is-collapsed .mission-details,
+.mission-panel.is-collapsed .mission-progress-copy > span {
+  display: none;
+}
+
+.mission-panel.is-collapsed .mission-progress {
+  margin-top: 7px;
+}
+
+.mission-panel.is-collapsed .mission-progress-copy {
+  margin-top: 4px;
+}
+
+.mission-details {
+  min-height: 0;
+  margin-top: 2px;
+  padding-right: 2px;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-color: rgba(120, 240, 198, 0.35) transparent;
+  scrollbar-width: thin;
+  touch-action: pan-y;
+}
+
+.mission-progress {
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 0,
+    rgba(255, 255, 255, 0.1) calc(5% - 2px),
+    transparent calc(5% - 2px),
+    transparent 5%
+  );
+}
+
+.mission-progress i {
+  background: linear-gradient(90deg, #67c9b3, #f6d365, #9b78c6);
+  box-shadow: 0 0 8px rgba(120, 240, 198, 0.45);
+}
+
+.mission-progress i[data-glow="100"] {
+  box-shadow:
+    0 0 12px rgba(248, 217, 135, 0.82),
+    0 0 24px rgba(120, 240, 198, 0.46);
+}
+
+.build-tray {
+  width: auto;
+  max-width: calc(100vw - 36px);
+  grid-template-columns: auto 38px auto;
+  gap: 7px;
+  padding: 7px;
+  border-radius: 16px;
+}
+
+.palette-toggle {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.palette-toggle i {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  border-radius: 7px;
+  background: var(--selected-swatch, var(--mint));
+  box-shadow: 0 0 9px color-mix(in srgb, var(--selected-swatch, var(--mint)) 55%, transparent);
+}
+
+.build-tray .palette-row {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  display: grid;
+  width: max-content;
+  max-width: calc(100vw - 20px);
+  grid-template-columns: repeat(12, 23px);
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--glass-strong);
+  box-shadow: 0 14px 40px rgba(4, 9, 18, 0.34);
+  transform: translateX(-50%);
+}
+
+.block-stack {
+  display: inline-flex;
+  min-width: 46px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 11px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.block-stack i {
+  color: var(--mint);
+  font-size: 11px;
+  font-style: normal;
+  filter: drop-shadow(0 0 5px rgba(120, 240, 198, 0.5));
+}
+
+.block-stack strong {
+  max-width: 34px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .world-panel-toggle,
+  .mission-panel-toggle,
+  .palette-toggle {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .world-panel {
+    width: auto;
+    max-width: calc(100vw - 20px);
+  }
+
+  .world-panel .progress-grid > span {
+    min-width: 40px;
+    min-height: 44px;
+    padding: 3px 5px;
+  }
+
+  .world-panel.is-expanded {
+    width: min(320px, calc(100vw - 20px));
+    max-height: calc(100dvh - 20px);
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .mission-panel.is-collapsed {
+    max-height: 92px;
+  }
+
+  .build-tray {
+    width: auto;
+    min-width: 0;
+    max-width: calc(100vw - 20px);
+    grid-template-columns: auto 44px auto;
+  }
+
+  .build-tray .palette-row {
+    grid-template-columns: repeat(6, 44px);
+    gap: 5px;
+  }
+
+  .palette-toggle,
+  .block-stack {
+    height: 44px;
+  }
+
+  .block-stack {
+    min-width: 52px;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .brand-panel {
+    top: max(8px, env(safe-area-inset-top));
+    left: max(8px, env(safe-area-inset-left));
+    max-width: calc(100vw - 16px);
+  }
+
+  .brand-panel small {
+    display: none;
+  }
+
+  .world-panel {
+    top: calc(max(8px, env(safe-area-inset-top)) + 64px);
+    right: max(8px, env(safe-area-inset-right));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    justify-content: center;
+    transform: none;
+  }
+
+  .world-panel.is-expanded {
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    width: min(320px, calc(100vw - 16px));
+  }
+
+  .world-panel .progress-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .build-tray {
+    top: calc(max(8px, env(safe-area-inset-top)) + 128px);
+    bottom: auto;
+    width: auto;
+    max-width: calc(100vw - 16px);
+  }
+
+  .game-shell:has(.owner-card:not([hidden])) .build-tray {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .owner-card {
+    top: calc(max(8px, env(safe-area-inset-top)) + 128px);
+    right: max(8px, env(safe-area-inset-right));
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: 128px;
+    gap: 8px;
+    padding: 9px;
+    overflow: hidden;
+  }
+
+  .owner-emblem {
+    flex-basis: 38px;
+    height: 38px;
+  }
+
+  .owner-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 5px;
+    margin-top: 5px;
+  }
+
+  .owner-actions button {
+    min-width: 0;
+    padding: 4px 6px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #owner-meta,
+  .owner-installed-at {
+    display: none;
+  }
+
+  .mission-panel,
+  .mission-panel.is-collapsed {
+    top: auto;
+    right: max(8px, env(safe-area-inset-right));
+    bottom: calc(max(12px, env(safe-area-inset-bottom)) + 138px);
+    left: max(8px, env(safe-area-inset-left));
+    width: auto;
+    max-height: min(46dvh, 340px);
+    padding: 9px 10px;
+  }
+
+  .mission-panel.is-collapsed {
+    max-height: 90px;
+  }
+
+  .highlight-banner {
+    top: calc(max(8px, env(safe-area-inset-top)) + 264px);
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    width: min(178px, calc(100vw - 16px));
+    max-width: none;
+    min-height: 48px;
+    gap: 4px;
+    padding: 4px;
+    transform: none;
+  }
+
+  .highlight-banner span {
+    display: none;
+  }
+
+  .highlight-banner button {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 3px 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .action-hint {
+    max-width: calc(100vw - 150px);
+  }
+
+  .start-overlay,
+  .fatal-overlay,
+  .mission-archive-overlay,
+  .analytics-settings-overlay {
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+
+  .start-card {
+    max-height: 100%;
+    padding: 20px 16px;
+    overflow: hidden;
+  }
+
+  .start-card h1 {
+    margin: 11px 0 8px;
+    font-size: clamp(25px, 9vw, 36px);
+  }
+
+  .start-card p {
+    margin-bottom: 13px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 400px) and (max-height: 700px) and (orientation: portrait) {
+  .brand-panel {
+    padding: 5px 7px 5px 5px;
+  }
+
+  .brand-mark {
+    width: 30px;
+    height: 30px;
+  }
+
+  .brand-panel strong {
+    font-size: 13px;
+  }
+
+  .world-panel {
+    top: calc(max(6px, env(safe-area-inset-top)) + 64px);
+    padding: 4px;
+  }
+
+  .world-panel .progress-grid > span {
+    min-width: 0;
+    padding: 2px 3px;
+  }
+
+  .world-panel .progress-grid strong {
+    font-size: 10px;
+  }
+
+  .status-icon {
+    width: 15px;
+    flex-basis: 15px;
+    font-size: 9px;
+  }
+
+  .build-tray,
+  .owner-card {
+    top: calc(max(6px, env(safe-area-inset-top)) + 124px);
+  }
+
+  .highlight-banner {
+    top: calc(max(6px, env(safe-area-inset-top)) + 250px);
+    width: min(155px, calc(100vw - 16px));
+  }
+
+  .mission-panel,
+  .mission-panel.is-collapsed {
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 124px);
+  }
+
+  .mission-panel.is-collapsed {
+    max-height: 82px;
+  }
+
+  .joystick {
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    width: 104px;
+    height: 104px;
+  }
+
+  .mobile-actions {
+    right: max(8px, env(safe-area-inset-right));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    grid-template-columns: repeat(2, 48px);
+    gap: 6px;
+  }
+
+  .mobile-actions button {
+    width: 48px;
+    height: 48px;
   }
 }

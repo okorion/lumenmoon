@@ -25,7 +25,7 @@ const WORLD_ID = "00000000-0000-4000-8000-000000000001";
 const SUPABASE_URL =
   process.env.SUPABASE_TEST_URL ?? "http://127.0.0.1:54321";
 const SUPABASE_ANON_KEY = process.env.SUPABASE_TEST_ANON_KEY;
-const ANALYTICS_CONSENT_KEY = "one-more-block:analytics-consent:v1";
+const ANALYTICS_CONSENT_KEY = "lumenmoon:analytics-consent:v1";
 const AUTH_STORAGE_KEY = `sb-${new URL(SUPABASE_URL).hostname.split(".")[0]}-auth-token`;
 const SCREENSHOT_DIRECTORY = resolve(
   dirname(fileURLToPath(import.meta.url)),
@@ -121,6 +121,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const bErrors = observePageErrors(bPage);
     await openPlayableWorld(bPage);
     await expectOnboardingHud(bPage, 2);
+    await assertMobileLayout(bPage);
     await exerciseConcurrentMobileControls(bContext, bPage);
     await verifyCreatorDiscovery(bPage, actorA.bootstrap);
     await assertMobileLayout(bPage);
@@ -143,6 +144,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const portraitErrors = observePageErrors(portraitPage);
     await openPlayableWorld(portraitPage);
     await expectOnboardingHud(portraitPage, 2);
+    await assertMobileLayout(portraitPage);
     await verifyCreatorDiscovery(portraitPage, actorA.bootstrap);
     await assertMobileLayout(portraitPage);
     await hideDevelopmentPerformanceHud(portraitPage);
@@ -163,9 +165,30 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const shortPortraitErrors = observePageErrors(shortPortraitPage);
     await openPlayableWorld(shortPortraitPage);
     await expectOnboardingHud(shortPortraitPage, 2);
+    await assertMobileLayout(shortPortraitPage);
     await verifyCreatorDiscovery(shortPortraitPage, actorA.bootstrap);
     await assertMobileLayout(shortPortraitPage);
     await shortPortraitContext.close();
+
+    const compactPortraitContext = await browser.newContext({
+      viewport: { width: 360, height: 640 },
+      isMobile: true,
+      hasTouch: true,
+      deviceScaleFactor: 2,
+      storageState: bStorageState,
+    });
+    const compactPortraitPage = await compactPortraitContext.newPage();
+    const compactPortraitErrors = observePageErrors(compactPortraitPage);
+    await openPlayableWorld(compactPortraitPage);
+    await expectOnboardingHud(compactPortraitPage, 2);
+    await assertMobileLayout(compactPortraitPage);
+    await verifyCreatorDiscovery(compactPortraitPage, actorA.bootstrap);
+    await assertMobileLayout(compactPortraitPage);
+    await compactPortraitPage.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-360x640.png"),
+      fullPage: true,
+    });
+    await compactPortraitContext.close();
 
     const desktopContext = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -174,6 +197,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const desktopPage = await desktopContext.newPage();
     const desktopErrors = observePageErrors(desktopPage);
     await openPlayableWorld(desktopPage);
+    await ensureMissionPanelExpanded(desktopPage);
     const desktopLight = desktopPage.locator(
       `[data-contributor-id="${actorA.bootstrap.player.publicId}"]`,
     );
@@ -273,6 +297,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
 
     await bPage.reload({ waitUntil: "domcontentloaded" });
     await openPlayableWorld(bPage, false);
+    await ensureMissionPanelExpanded(bPage);
     await bPage.locator("#mission-archive-button").click();
     await expect(bPage.locator("#mission-archive-overlay")).toBeVisible();
     const archiveCard = bPage.locator(".mission-archive-card").filter({
@@ -312,6 +337,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     await expect(reconnectedAPage.locator("#storage-description")).toContainText(
       actorA.bootstrap.player.publicId,
     );
+    await ensureMissionPanelExpanded(reconnectedAPage);
     await reconnectedAPage.locator("#mission-archive-button").click();
     await expect(
       reconnectedAPage.locator(".mission-archive-card").filter({
@@ -333,6 +359,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       ["B", bErrors],
       ["portrait B", portraitErrors],
       ["short portrait B", shortPortraitErrors],
+      ["compact portrait B", compactPortraitErrors],
       ["desktop B", desktopErrors],
       ["reconnected A", reconnectedErrors],
     ] as const) {
@@ -471,6 +498,7 @@ async function expectOnboardingHud(page: Page, inventory: number): Promise<void>
 }
 
 async function firstRecommendedSlot(page: Page): Promise<number> {
+  await ensureMissionPanelExpanded(page);
   const first = page.locator("[data-mission-slot]").first();
   await expect(first).toBeVisible();
   await first.click();
@@ -483,6 +511,7 @@ async function verifyCreatorDiscovery(
   page: Page,
   creator: PlayerBootstrap,
 ): Promise<void> {
+  await ensureMissionPanelExpanded(page);
   const light = page.locator(
     `[data-contributor-id="${creator.player.publicId}"]`,
   );
@@ -500,6 +529,21 @@ async function verifyCreatorDiscovery(
   await expectCreatorCard(page, creator);
 }
 
+async function ensureMissionPanelExpanded(page: Page): Promise<void> {
+  const toggle = page.locator("#mission-panel-toggle");
+  if ((await toggle.getAttribute("aria-expanded")) !== "true") {
+    const touchLayout = await page.evaluate(
+      () => matchMedia("(pointer: coarse)").matches || innerWidth <= 760,
+    );
+    if (touchLayout) {
+      await toggle.click();
+    } else {
+      await page.keyboard.press("KeyM");
+    }
+  }
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+}
+
 async function expectCreatorCard(
   page: Page,
   creator: PlayerBootstrap,
@@ -508,15 +552,24 @@ async function expectCreatorCard(
   await expect(page.locator("#owner-name")).toHaveText(creator.player.nickname);
   await expect(page.locator("#owner-id")).toHaveText(creator.player.publicId);
   await expect(page.locator("#owner-emblem")).toHaveText(creator.player.emblem);
-  await expect(page.locator("#owner-mission-meta")).toContainText("루멘문");
+  await expect(page.locator("#owner-mission-meta")).toContainText("별빛 관문");
 }
 
 async function assertMobileLayout(page: Page): Promise<void> {
   const result = await page.evaluate(() => {
-    const rect = (selector: string): DOMRect => {
+    const visibleRect = (selector: string): DOMRect | null => {
       const element = document.querySelector<HTMLElement>(selector);
       if (!element) throw new Error(`${selector} 요소가 없습니다.`);
-      return element.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      return !element.hidden &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        style.opacity !== "0" &&
+        rect.width > 0 &&
+        rect.height > 0
+        ? rect
+        : null;
     };
     const overlaps = (left: DOMRect, right: DOMRect): boolean =>
       left.left < right.right &&
@@ -530,11 +583,14 @@ async function assertMobileLayout(page: Page): Promise<void> {
       ["mission-panel", "#mission-panel"],
       ["owner-card", "#owner-card"],
       ["highlight-banner", "#highlight-banner"],
+      ["brand-panel", ".brand-panel"],
+      ["world-panel", ".world-panel"],
+      ["build-tray", ".build-tray"],
     ] as const;
-    const protectedRects = protectedElements.map(([name, selector]) => ({
-      name,
-      rect: rect(selector),
-    }));
+    const protectedRects = protectedElements.flatMap(([name, selector]) => {
+      const rect = visibleRect(selector);
+      return rect ? [{ name, rect }] : [];
+    });
     const overlapPairs: string[] = [];
     for (let leftIndex = 0; leftIndex < protectedRects.length; leftIndex += 1) {
       for (
@@ -558,24 +614,65 @@ async function assertMobileLayout(page: Page): Promise<void> {
       "#mission-contribute-button",
     ];
     const undersized = touchSelectors.filter((selector) => {
-      const target = rect(selector);
-      return target.width < 44 || target.height < 44;
+      const target = visibleRect(selector);
+      return target !== null && (target.width < 44 || target.height < 44);
     });
+    const outsideViewport = protectedRects
+      .filter(
+        ({ rect }) =>
+          rect.left < -1 ||
+          rect.top < -1 ||
+          rect.right > window.innerWidth + 1 ||
+          rect.bottom > window.innerHeight + 1,
+      )
+      .map(({ name }) => name);
+    const clippedButtons = [
+      ...document.querySelectorAll<HTMLButtonElement>(
+        ".brand-panel button, .world-panel button, .mission-panel button, .owner-card button, .build-tray button, .highlight-banner button, .mobile-actions button",
+      ),
+    ]
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return !button.hidden &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.opacity !== "0" &&
+          rect.width > 0;
+      })
+      .filter(
+        (button) =>
+          button.scrollWidth > button.clientWidth + 1 ||
+          button.scrollHeight > button.clientHeight + 1,
+      )
+      .map((button) => button.id || button.getAttribute("aria-label") || "button");
     return {
       horizontalOverflow:
         document.documentElement.scrollWidth > window.innerWidth,
+      verticalOverflow:
+        document.documentElement.scrollHeight > window.innerHeight,
       overlapPairs,
       undersized,
+      outsideViewport,
+      clippedButtons,
     };
   });
   expect(result).toEqual({
     horizontalOverflow: false,
+    verticalOverflow: false,
     overlapPairs: [],
     undersized: [],
+    outsideViewport: [],
+    clippedButtons: [],
   });
 }
 
 async function assertContextLossRecovery(page: Page): Promise<void> {
+  if ((await page.evaluate(() => document.pointerLockElement)) === null) {
+    const resume = page.locator("#pointer-resume-button");
+    await expect(resume).toBeVisible();
+    await resume.click();
+  }
   await expect
     .poll(() =>
       page.evaluate(() => document.pointerLockElement?.id ?? null),

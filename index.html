@@ -1,30 +1,95 @@
-﻿<!doctype html>
-<html lang="ko">
+<!doctype html>
+<html lang="ko-KR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
+    />
     <meta name="theme-color" content="#101a2c" />
-    <meta name="description" content="사람들이 함께 한 칸씩 이어 만드는 가벼운 비동기 1인칭 복셀 건축 게임" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="이전 플레이어의 블록을 발견하고 내 거점과 별빛 관문을 이어 만드는 모바일·데스크톱 1인칭 비동기 공동 복셀 건축 게임."
+    />
+    <meta
+      name="keywords"
+      content="루멘문, Lumenmoon, 웹 게임, 복셀 게임, 건축 게임, 비동기 멀티플레이, Three.js"
+    />
+    <meta name="author" content="Lumenmoon" />
     <meta name="application-name" content="루멘문" />
     <meta name="apple-mobile-web-app-title" content="루멘문" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="format-detection" content="telephone=no" />
+    <meta name="robots" content="index,follow,max-image-preview:large" />
+    <link rel="canonical" href="https://lumenmoon.vercel.app/" />
+
     <meta property="og:site_name" content="루멘문" />
-    <meta property="og:title" content="루멘문" />
-    <meta property="og:description" content="사람들이 함께 한 칸씩 이어 만드는 가벼운 비동기 1인칭 복셀 건축 게임" />
+    <meta property="og:title" content="루멘문 | 함께 이어 만드는 비동기 복셀 월드" />
+    <meta
+      property="og:description"
+      content="떠난 플레이어의 블록을 발견하고, 나만의 거점과 모두의 별빛 관문을 이어 만드세요."
+    />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="루멘문" />
-    <meta name="twitter:description" content="사람들이 함께 한 칸씩 이어 만드는 가벼운 비동기 1인칭 복셀 건축 게임" />
-    <meta name="robots" content="index,follow" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="https://lumenmoon.vercel.app/" />
+    <meta property="og:image" content="https://lumenmoon.vercel.app/og/lumenmoon-og.jpg" />
+    <meta
+      property="og:image:secure_url"
+      content="https://lumenmoon.vercel.app/og/lumenmoon-og.jpg"
+    />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="달빛 아래 여러 작은 거점이 중앙의 빛나는 별빛 관문으로 이어진 루멘문 세계"
+    />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="루멘문 | 함께 이어 만드는 비동기 복셀 월드" />
+    <meta
+      name="twitter:description"
+      content="떠난 플레이어의 블록을 발견하고, 나만의 거점과 모두의 별빛 관문을 이어 만드세요."
+    />
+    <meta name="twitter:image" content="https://lumenmoon.vercel.app/og/lumenmoon-og.jpg" />
+    <meta
+      name="twitter:image:alt"
+      content="달빛 아래 여러 작은 거점이 중앙의 빛나는 별빛 관문으로 이어진 루멘문 세계"
+    />
+
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
-    <title>루멘문 · 비동기 공동 복셀 월드</title>
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "루멘문",
+        "alternateName": "Lumenmoon",
+        "url": "https://lumenmoon.vercel.app/",
+        "image": "https://lumenmoon.vercel.app/og/lumenmoon-og.jpg",
+        "description": "이전 플레이어의 블록을 발견하고 내 거점과 별빛 관문을 이어 만드는 1인칭 비동기 공동 복셀 건축 게임.",
+        "genre": ["Building game", "Casual game"],
+        "gamePlatform": ["Web Browser", "Mobile Web"],
+        "operatingSystem": "Any modern browser with WebGL2",
+        "applicationCategory": "Game",
+        "isAccessibleForFree": true,
+        "inLanguage": "ko-KR",
+        "author": {
+          "@type": "Organization",
+          "name": "Lumenmoon"
+        }
+      }
+    </script>
+
+    <title>루멘문 | 함께 이어 만드는 비동기 복셀 월드</title>
   </head>
   <body>
     <main id="app"></main>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
-

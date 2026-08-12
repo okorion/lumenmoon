@@ -6,7 +6,7 @@ import type {
   AnalyticsEventPropertyMap,
 } from "./types";
 
-const CONSENT_STORAGE_KEY = "one-more-block:analytics-consent:v1";
+const CONSENT_STORAGE_KEY = "lumenmoon:analytics-consent:v1";
 
 export interface AnalyticsConsentStore {
   read(): AnalyticsConsentChoice;

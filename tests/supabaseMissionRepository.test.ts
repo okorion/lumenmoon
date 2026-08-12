@@ -43,7 +43,7 @@ function contribution() {
     creator_emblem: "✦",
     created_at: SERVER_NOW,
     mission_id: MISSION_ID,
-    mission_name: "루멘문",
+    mission_name: "별빛 관문",
     mission_layer: 1,
   };
 }
@@ -54,7 +54,7 @@ function mission(
   return {
     id: MISSION_ID,
     template_key: "starlight-gate",
-    name: "루멘문",
+    name: "별빛 관문",
     layer: 1,
     origin_x: 0,
     origin_y: 1,

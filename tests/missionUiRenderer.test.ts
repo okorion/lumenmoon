@@ -40,7 +40,7 @@ function visual(
     isReplica,
     symmetryQuarter: isReplica ? 1 : 0,
     instanceId: "mission-1",
-    missionName: "루멘문",
+    missionName: "별빛 관문",
     layer: 1,
     canonicalContributionId: "canonical-7",
   };
@@ -67,7 +67,7 @@ describe("공동 미션 UI·렌더 표현", () => {
     expect(result[0]?.sourceBlock.owner.publicId).toBe("#A1B2");
   });
 
-  it("25·50·75·100 단계가 서로 다른 문구와 점증하는 발광을 가진다", () => {
+  it("구조 단계 문구와 5% 단위 발광이 각각 점증한다", () => {
     const stages = [0, 25, 50, 75, 100] as const;
     expect(stages.map(missionStageLabel)).toEqual([
       "별빛 모으는 중",
@@ -79,6 +79,12 @@ describe("공동 미션 UI·렌더 표현", () => {
     expect(stages.map(missionEmissiveIntensity)).toEqual(
       [...stages.map(missionEmissiveIntensity)].sort((left, right) => left - right),
     );
+    const glowSteps = Array.from({ length: 21 }, (_, index) => index * 5) as Array<
+      0 | 5 | 10 | 15 | 20 | 25 | 30 | 35 | 40 | 45 | 50 | 55 | 60 | 65 | 70 | 75 | 80 | 85 | 90 | 95 | 100
+    >;
+    const intensities = glowSteps.map(missionEmissiveIntensity);
+    expect(intensities).toEqual([...intensities].sort((left, right) => left - right));
+    expect(new Set(intensities)).toHaveLength(21);
   });
 
   it("조준 카드의 찾아가기는 같은 제작자의 첫 블록 대신 해당 정규 기여를 고른다", () => {
