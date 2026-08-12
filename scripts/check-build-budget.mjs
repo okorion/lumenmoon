@@ -1,7 +1,8 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { stdout } from "node:process";
 import { gzipSync } from "node:zlib";
+import { collectInitialJavaScriptPaths } from "./build-budget-utils.mjs";
 
 const kibibyte = 1_024;
 const budgets = {
@@ -10,22 +11,25 @@ const budgets = {
   moonstoneTextures: 32 * kibibyte,
 };
 const root = resolve(import.meta.dirname, "..");
-const assetsDirectory = resolve(root, "dist", "assets");
-const assetNames = await readdir(assetsDirectory);
-const mainCandidates = assetNames.filter(
-  (name) => name.startsWith("index-") && name.endsWith(".js"),
-);
-
-if (mainCandidates.length !== 1) {
+const distDirectory = resolve(root, "dist");
+const indexHtml = await readFile(resolve(distDirectory, "index.html"), "utf8");
+const htmlDeclaredJavaScriptPaths = collectInitialJavaScriptPaths(indexHtml);
+if (htmlDeclaredJavaScriptPaths.length === 0) {
   throw new Error(
-    `Expected exactly one main index JavaScript chunk, found ${mainCandidates.length}.`,
+    "Expected at least one initial JavaScript asset in dist/index.html.",
   );
 }
-
-const mainPath = resolve(assetsDirectory, mainCandidates[0]);
-const mainSource = await readFile(mainPath);
-const mainRawBytes = mainSource.byteLength;
-const mainGzipBytes = gzipSync(mainSource, { level: 9 }).byteLength;
+const initialSources = await Promise.all(
+  htmlDeclaredJavaScriptPaths.map((path) => readFile(resolve(distDirectory, path))),
+);
+const mainRawBytes = initialSources.reduce(
+  (total, source) => total + source.byteLength,
+  0,
+);
+const mainGzipBytes = initialSources.reduce(
+  (total, source) => total + gzipSync(source, { level: 9 }).byteLength,
+  0,
+);
 const textureNames = [
   "lumenmoon-moonstone-v1.webp",
   "lumenmoon-moonstone-normal-v1.webp",
@@ -50,5 +54,5 @@ for (const [name, value] of Object.entries(measurements)) {
 }
 
 stdout.write(
-  `[build-budget] PASS main=${mainRawBytes} B raw/${mainGzipBytes} B gzip, textures=${textureBytes} B\n`,
+  `[build-budget] PASS html-declared=${mainRawBytes} B raw/${mainGzipBytes} B gzip (${htmlDeclaredJavaScriptPaths.join(", ")}), textures=${textureBytes} B\n`,
 );

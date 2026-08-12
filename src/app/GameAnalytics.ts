@@ -65,6 +65,7 @@ export class GameAnalytics {
   private consentGeneration = 0;
   private readonly intervalCreators = new Set<string>();
   private readonly pendingFailures: PendingFailure[] = [];
+  private initializationPromise: Promise<void> = Promise.resolve();
 
   private constructor(
     private readonly controller: AnalyticsConsentController,
@@ -101,11 +102,14 @@ export class GameAnalytics {
     );
     // A prior explicit choice may initialize the lazily imported provider, but
     // it never delays rendering or repository bootstrap.
-    void browserAnalytics.analytics
+    analytics.initializationPromise = browserAnalytics.analytics
       .applyStoredChoice()
       .then(() => {
         analytics.flushPendingFailures();
         return analytics.maybeStart();
+      })
+      .catch(() => {
+        // Optional analytics initialization must never reject into gameplay.
       });
     return analytics;
   }
@@ -152,6 +156,15 @@ export class GameAnalytics {
       app_version: packageMetadata.version,
     };
     void this.maybeStart();
+  }
+
+  async prepareForReplay(context: GameAnalyticsStartContext): Promise<void> {
+    this.startContext = {
+      ...context,
+      app_version: packageMetadata.version,
+    };
+    await this.initializationPromise;
+    await this.maybeStart();
   }
 
   markInput(now = Date.now()): void {

@@ -168,7 +168,7 @@ npm run test:e2e:online
 
 GitHub Actions의 Vercel 자동 배포는 저장소 변수 `ENABLE_VERCEL_DEPLOY=true`일 때만 실행됩니다. 이때 `VERCEL_TOKEN`, `VERCEL_SCOPE`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` secret 중 하나라도 비어 있으면 누락된 이름만 표시하고 배포 전에 실패합니다. 플래그가 없거나 `false`이면 CI 검증만 수행하고 배포 job은 건너뜁니다.
 
-PR과 `main` push CI는 lint·typecheck·unit·production build뿐 아니라 로컬 Supabase migration/pgTAP·익명 HTTP, Chromium의 온라인 A/B 흐름·GPU plateau·렌더 예산, axe 기반 접근성 E2E까지 실행합니다. 배포 job은 정적 검증과 통합 검증이 모두 통과해야 시작됩니다. 실제 Supabase Cloud를 `online`으로 공개하는 경우에는 이 로컬 CI와 별도로 대상 프로젝트 migration 적용·smoke test가 필요합니다.
+PR과 `main` push CI는 lint·typecheck·unit·production build뿐 아니라 로컬 Supabase migration/pgTAP·익명 HTTP, Chromium의 온라인 A/B 흐름·GPU plateau·렌더 예산, axe 기반 접근성 E2E까지 실행합니다. 초기 HTML에 선언된 모듈 엔트리와 preload 청크도 합산해 raw 800KiB·gzip 210KiB 예산을 검사합니다. 배포 job은 정적 검증과 통합 검증이 모두 통과해야 시작됩니다. 실제 Supabase Cloud를 `online`으로 공개하는 경우에는 이 로컬 CI와 별도로 대상 프로젝트 migration 적용·smoke test가 필요합니다.
 
 ## 비용과 보안 경계
 

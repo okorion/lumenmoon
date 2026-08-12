@@ -5,9 +5,7 @@ import type {
   AnalyticsEventName,
   AnalyticsEventPropertyMap,
 } from "./types";
-
-const CONSENT_STORAGE_KEY = "lumenmoon:analytics-consent:v1";
-
+import { ANALYTICS_CONSENT_STORAGE_KEY } from "./storageKeys";
 export interface AnalyticsConsentStore {
   read(): AnalyticsConsentChoice;
   write(choice: AnalyticsConsentChoice): void;
@@ -30,7 +28,9 @@ export class LocalStorageAnalyticsConsentStore implements AnalyticsConsentStore 
 
   read(): AnalyticsConsentChoice {
     try {
-      return parseConsent(this.storage.getItem(CONSENT_STORAGE_KEY));
+      return parseConsent(
+        this.storage.getItem(ANALYTICS_CONSENT_STORAGE_KEY),
+      );
     } catch {
       return "undecided";
     }
@@ -38,7 +38,7 @@ export class LocalStorageAnalyticsConsentStore implements AnalyticsConsentStore 
 
   write(choice: AnalyticsConsentChoice): void {
     try {
-      this.storage.setItem(CONSENT_STORAGE_KEY, choice);
+      this.storage.setItem(ANALYTICS_CONSENT_STORAGE_KEY, choice);
     } catch {
       // Consent persistence must not affect gameplay.
     }

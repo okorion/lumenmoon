@@ -122,7 +122,8 @@ import {
   mergeServerAndSystemBlocks,
   reconcileFreeModeMutationResult,
 } from "./onlineWorld";
-import { GameAnalytics } from "./GameAnalytics";
+import type { GameAnalytics } from "./GameAnalytics";
+import { DeferredGameAnalytics } from "./DeferredGameAnalytics";
 import { retryIdempotentOnce } from "./repositoryRetry";
 import type {
   AnalyticsFailureCode,
@@ -141,8 +142,23 @@ import {
 interface GameDependencies {
   clock?: Clock;
   config?: Readonly<GameRulesConfig>;
-  analytics?: GameAnalytics;
+  analytics?: GameAnalyticsClient;
 }
+
+type GameAnalyticsClient = Pick<
+  GameAnalytics,
+  | "consentChoice"
+  | "setConsent"
+  | "worldControllable"
+  | "markInput"
+  | "tick"
+  | "increment"
+  | "otherCreatorSeen"
+  | "creatorDetailsOpened"
+  | "milestone"
+  | "failure"
+  | "checkpoint"
+>;
 
 interface GuideCounts {
   base: number;
@@ -238,7 +254,7 @@ export class GameApp {
   private onlineChunkKey = "";
   private onlineChunkGeneration = 0;
   private readonly onlineProgressGate = new OnlineProgressGate();
-  private readonly analytics: GameAnalytics;
+  private readonly analytics: GameAnalyticsClient;
   private readonly worldReadyMs: number;
   private readonly storageWarning: string | null;
   private readonly performanceHudEnabled = isPerformanceHudEnabled(
@@ -262,7 +278,7 @@ export class GameApp {
     audio: GameAudio,
     SoundSettingsPanelClass: new (root: HTMLElement) => SoundSettingsPanel,
     GameInputClass: GameInputConstructor,
-    analytics: GameAnalytics,
+    analytics: GameAnalyticsClient,
     worldReadyMs: number,
   ) {
     if (!snapshot.localState) {
@@ -474,7 +490,7 @@ export class GameApp {
     dependencies: GameDependencies = {},
   ): Promise<GameApp | null> {
     const bootStartedAt = performance.now();
-    const analytics = dependencies.analytics ?? GameAnalytics.create();
+    const analytics = dependencies.analytics ?? DeferredGameAnalytics.create();
     if (!supportsWebGL2()) {
       analytics.failure("webgl_unsupported", "renderer", false, false);
       const preliminaryUi = new GameUI(root);
