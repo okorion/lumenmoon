@@ -81,7 +81,7 @@ export class GameAudio {
   }
 
   setScene(scene: MusicScene): void {
-    if (this.musicScene === scene) {
+    if (this.musicScene === scene && this.musicTimer !== null) {
       return;
     }
     this.musicScene = scene;
@@ -387,29 +387,46 @@ export class GameAudio {
     }
     const startsAt = context.currentTime + delay;
     const endsAt = startsAt + duration;
-    const oscillator = context.createOscillator();
-    const envelope = context.createGain();
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(fromHz, startsAt);
-    oscillator.frequency.exponentialRampToValueAtTime(toHz, endsAt);
-    envelope.gain.setValueAtTime(0.0001, startsAt);
-    envelope.gain.exponentialRampToValueAtTime(volume, startsAt + Math.min(0.025, duration * 0.2));
-    envelope.gain.exponentialRampToValueAtTime(0.0001, endsAt);
-    oscillator.connect(envelope);
-    envelope.connect(destination);
-    oscillator.start(startsAt);
-    oscillator.stop(endsAt + 0.015);
-    oscillator.addEventListener(
-      "ended",
-      () => {
-        oscillator.disconnect();
-        envelope.disconnect();
+    let oscillator: OscillatorNode | null = null;
+    let envelope: GainNode | null = null;
+    try {
+      oscillator = context.createOscillator();
+      envelope = context.createGain();
+      oscillator.type = type;
+      oscillator.frequency.setValueAtTime(fromHz, startsAt);
+      oscillator.frequency.exponentialRampToValueAtTime(toHz, endsAt);
+      envelope.gain.setValueAtTime(0.0001, startsAt);
+      envelope.gain.exponentialRampToValueAtTime(
+        volume,
+        startsAt + Math.min(0.025, duration * 0.2),
+      );
+      envelope.gain.exponentialRampToValueAtTime(0.0001, endsAt);
+      oscillator.connect(envelope);
+      envelope.connect(destination);
+      oscillator.start(startsAt);
+      oscillator.stop(endsAt + 0.015);
+      const activeOscillator = oscillator;
+      const activeEnvelope = envelope;
+      oscillator.addEventListener(
+        "ended",
+        () => {
+          safelyDisconnect(activeOscillator);
+          safelyDisconnect(activeEnvelope);
+          this.activeMusicNodes.delete(activeOscillator);
+        },
+        { once: true },
+      );
+      if (channel === "music") {
+        this.activeMusicNodes.add(oscillator);
+      }
+    } catch (error) {
+      safelyStop(oscillator);
+      safelyDisconnect(oscillator);
+      safelyDisconnect(envelope);
+      if (oscillator) {
         this.activeMusicNodes.delete(oscillator);
-      },
-      { once: true },
-    );
-    if (channel === "music") {
-      this.activeMusicNodes.add(oscillator);
+      }
+      throw error;
     }
   }
 
@@ -465,11 +482,15 @@ export class GameAudio {
     ) {
       return;
     }
-    this.scheduleMusicPhrase();
-    this.musicTimer = window.setInterval(
-      () => this.scheduleMusicPhrase(),
-      MUSIC_PHRASE_INTERVAL_MS,
-    );
+    try {
+      this.scheduleMusicPhrase();
+      this.musicTimer = window.setInterval(
+        () => this.tryScheduleMusicPhrase(),
+        MUSIC_PHRASE_INTERVAL_MS,
+      );
+    } catch {
+      this.stopMusic();
+    }
   }
 
   private stopMusic(): void {
@@ -495,6 +516,16 @@ export class GameAudio {
       this.tone("sine", frequency * 1.5, frequency * 1.502, 2.8, 0.007, "music", delay + 0.08);
     });
   }
+
+  private tryScheduleMusicPhrase(): void {
+    try {
+      this.scheduleMusicPhrase();
+    } catch {
+      // Optional music must not reject a scene transition or a game frame.
+      // Clearing the failed phrase also leaves the scene eligible for retry.
+      this.stopMusic();
+    }
+  }
 }
 
 function musicNotes(scene: MusicScene): readonly number[] {
@@ -518,4 +549,20 @@ function safeLocalStorage(): Storage | null {
 
 function monotonicNow(): number {
   return typeof performance === "undefined" ? Date.now() : performance.now();
+}
+
+function safelyStop(node: OscillatorNode | null): void {
+  try {
+    node?.stop();
+  } catch {
+    // The node may already have ended or may not have reached start().
+  }
+}
+
+function safelyDisconnect(node: AudioNode | null): void {
+  try {
+    node?.disconnect();
+  } catch {
+    // A partially constructed graph may never have connected this node.
+  }
 }
