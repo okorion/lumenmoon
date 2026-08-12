@@ -20,6 +20,7 @@ import type {
 import { SupabaseRepository } from "../src/data/SupabaseRepository";
 import { expandMissionBlocks } from "../src/domain/mission";
 import { createStarterBayLayout } from "../src/domain/starterBay";
+import { createCreatorCrest } from "../src/ui/icons";
 
 const WORLD_ID = "00000000-0000-4000-8000-000000000001";
 const SUPABASE_URL =
@@ -49,6 +50,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     browser,
   }) => {
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
+    await waitForSupabaseReady(requiredAnonKey());
 
     const [actorA, actorB] = await Promise.all([
       createActor(requiredAnonKey()),
@@ -121,12 +123,23 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const bErrors = observePageErrors(bPage);
     await openPlayableWorld(bPage);
     await expectOnboardingHud(bPage, 2);
+    await assertProfileStatusComposition(bPage, actorB.bootstrap);
+    await assertMinimalMobileHud(bPage);
     await assertMobileLayout(bPage);
+    await exerciseWorldPanelDisclosure(bPage);
+    await exercisePaletteDisclosure(bPage);
+    await exercisePaletteDismissal(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
+    await exerciseOrientationDisclosureReset(bPage);
     await exerciseConcurrentMobileControls(bContext, bPage);
-    await verifyCreatorDiscovery(bPage, actorA.bootstrap);
-    await assertMobileLayout(bPage);
     const mobilePerformance = await readPerformanceSnapshot(bPage);
     await hideDevelopmentPerformanceHud(bPage);
+    await bPage.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-844x390.png"),
+      fullPage: true,
+    });
+    await verifyCreatorDiscovery(bPage, actorA.bootstrap);
+    await assertMobileLayout(bPage);
     await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-844x390.png"),
       fullPage: true,
@@ -144,10 +157,22 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const portraitErrors = observePageErrors(portraitPage);
     await openPlayableWorld(portraitPage);
     await expectOnboardingHud(portraitPage, 2);
-    await assertMobileLayout(portraitPage);
-    await verifyCreatorDiscovery(portraitPage, actorA.bootstrap);
+    await assertProfileStatusComposition(portraitPage, actorB.bootstrap);
+    await assertMinimalMobileHud(portraitPage);
     await assertMobileLayout(portraitPage);
     await hideDevelopmentPerformanceHud(portraitPage);
+    await exerciseWorldPanelDisclosure(
+      portraitPage,
+      "profile-expanded-mobile-390x844.png",
+    );
+    await exercisePaletteDisclosure(portraitPage);
+    await exerciseMissionPanelDisclosure(portraitPage);
+    await portraitPage.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-390x844.png"),
+      fullPage: true,
+    });
+    await verifyCreatorDiscovery(portraitPage, actorA.bootstrap);
+    await assertMobileLayout(portraitPage);
     await portraitPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-390x844.png"),
       fullPage: true,
@@ -165,7 +190,11 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const shortPortraitErrors = observePageErrors(shortPortraitPage);
     await openPlayableWorld(shortPortraitPage);
     await expectOnboardingHud(shortPortraitPage, 2);
+    await assertMinimalMobileHud(shortPortraitPage);
     await assertMobileLayout(shortPortraitPage);
+    await exerciseWorldPanelDisclosure(shortPortraitPage);
+    await exercisePaletteDisclosure(shortPortraitPage);
+    await exerciseMissionPanelDisclosure(shortPortraitPage);
     await verifyCreatorDiscovery(shortPortraitPage, actorA.bootstrap);
     await assertMobileLayout(shortPortraitPage);
     await shortPortraitContext.close();
@@ -181,9 +210,14 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const compactPortraitErrors = observePageErrors(compactPortraitPage);
     await openPlayableWorld(compactPortraitPage);
     await expectOnboardingHud(compactPortraitPage, 2);
+    await assertMinimalMobileHud(compactPortraitPage);
     await assertMobileLayout(compactPortraitPage);
+    await exerciseWorldPanelDisclosure(compactPortraitPage);
+    await exercisePaletteDisclosure(compactPortraitPage);
+    await exerciseMissionPanelDisclosure(compactPortraitPage);
     await verifyCreatorDiscovery(compactPortraitPage, actorA.bootstrap);
     await assertMobileLayout(compactPortraitPage);
+    await hideDevelopmentPerformanceHud(compactPortraitPage);
     await compactPortraitPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-360x640.png"),
       fullPage: true,
@@ -304,7 +338,19 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       hasText: actorA.bootstrap.player.publicId,
     });
     await expect(archiveCard).toContainText(actorA.bootstrap.player.nickname);
-    await expect(archiveCard).toContainText(actorA.bootstrap.player.emblem);
+    const archivedActor = archiveCard.locator(".archive-contributor").filter({
+      hasText: actorA.bootstrap.player.publicId,
+    });
+    await expect(
+      archivedActor.locator("[data-creator-crest]").first(),
+    ).toHaveAttribute(
+      "data-creator-crest",
+      createCreatorCrest(actorA.bootstrap.player).key,
+    );
+    await expect(archivedActor.locator("[data-emblem]")).toHaveAttribute(
+      "data-emblem",
+      actorA.bootstrap.player.emblem,
+    );
     await expect(archiveCard).toContainText("1칸");
     await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "archive-mobile-844x390.png"),
@@ -488,6 +534,7 @@ async function openPlayableWorld(
   await expect(page.locator("#start-button")).toBeVisible();
   await page.locator("#start-button").click();
   await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u);
+  await expect(page.locator(".start-overlay")).toBeHidden();
   await expect(page.locator("#mission-panel")).toBeVisible();
 }
 
@@ -511,6 +558,7 @@ async function verifyCreatorDiscovery(
   page: Page,
   creator: PlayerBootstrap,
 ): Promise<void> {
+  const expectedCrestKey = createCreatorCrest(creator.player).key;
   await ensureMissionPanelExpanded(page);
   const light = page.locator(
     `[data-contributor-id="${creator.player.publicId}"]`,
@@ -519,14 +567,21 @@ async function verifyCreatorDiscovery(
   await expect(light).toContainText(creator.player.nickname);
   await expect(light).toContainText(creator.player.publicId);
   await expect(light).toContainText("1칸");
-  await expect(light.locator("span").first()).toHaveText(creator.player.emblem);
+  await expect(light.locator("[data-emblem]").first()).toHaveAttribute(
+    "data-emblem",
+    creator.player.emblem,
+  );
+  await expect(light.locator("[data-creator-crest]").first()).toHaveAttribute(
+    "data-creator-crest",
+    expectedCrestKey,
+  );
   await light.click();
   await expect(page.locator("#highlight-label")).toContainText(
     creator.player.publicId,
   );
   await expect(page.locator("#highlight-find-button")).toBeVisible();
   await page.locator("#highlight-find-button").click();
-  await expectCreatorCard(page, creator);
+  await expectCreatorCard(page, creator, expectedCrestKey);
 }
 
 async function ensureMissionPanelExpanded(page: Page): Promise<void> {
@@ -547,12 +602,372 @@ async function ensureMissionPanelExpanded(page: Page): Promise<void> {
 async function expectCreatorCard(
   page: Page,
   creator: PlayerBootstrap,
+  expectedCrestKey: string,
 ): Promise<void> {
-  await expect(page.locator("#owner-card")).toBeVisible();
+  const tooltip = page.locator("#owner-tooltip");
+  await expect(tooltip).toBeVisible();
+  await expect(page.locator("#owner-tooltip-name")).toHaveText(
+    creator.player.nickname,
+  );
+  await expect(page.locator("#owner-tooltip-date")).not.toHaveText(
+    "설치일 미상",
+  );
+  await expect(page.locator("#owner-tooltip-date")).toHaveAttribute(
+    "datetime",
+    /\d{4}-\d{2}-\d{2}T/u,
+  );
+  await expect(tooltip).not.toContainText(creator.player.publicId);
+  await expect(page.locator("#owner-tooltip-crest")).toHaveAttribute(
+    "data-creator-crest",
+    expectedCrestKey,
+  );
+  await expect(page.locator("#owner-tooltip-crest .creator-crest")).toHaveAttribute(
+    "viewBox",
+    "0 0 24 24",
+  );
+  await expect(page.locator("#action-hint")).toBeHidden();
+  const ownerMore = page.locator("#owner-tooltip-more");
+  await expect(ownerMore).toHaveAttribute("aria-controls", "owner-card");
+  await expect(ownerMore).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#owner-card")).toBeHidden();
+  const touchLayout = await page.evaluate(
+    () => matchMedia("(pointer: coarse)").matches || innerWidth <= 760,
+  );
+  if (touchLayout) {
+    const tooltipGeometry = await page.evaluate(() => {
+      const ownerTooltip = document.querySelector<HTMLElement>("#owner-tooltip");
+      const crosshair = document.querySelector<HTMLElement>(".crosshair");
+      if (!ownerTooltip || !crosshair) {
+        throw new Error("제작자 툴팁 또는 조준점이 없습니다.");
+      }
+      const tooltipRect = ownerTooltip.getBoundingClientRect();
+      const crosshairRect = crosshair.getBoundingClientRect();
+      return {
+        centerDelta: Math.abs(
+          tooltipRect.left + tooltipRect.width / 2 -
+            (crosshairRect.left + crosshairRect.width / 2),
+        ),
+        gap: tooltipRect.top - crosshairRect.bottom,
+        insideViewport:
+          tooltipRect.left >= 0 &&
+          tooltipRect.right <= innerWidth &&
+          tooltipRect.top >= 0 &&
+          tooltipRect.bottom <= innerHeight,
+      };
+    });
+    expect(tooltipGeometry.centerDelta).toBeLessThanOrEqual(2);
+    expect(tooltipGeometry.gap).toBeGreaterThanOrEqual(4);
+    expect(tooltipGeometry.insideViewport).toBe(true);
+    await ownerMore.click();
+  } else {
+    const resume = page.locator("#pointer-resume-button");
+    if (await resume.isVisible()) {
+      await resume.click();
+    }
+    await expect
+      .poll(() =>
+        page.evaluate(() => document.pointerLockElement?.id ?? null),
+      )
+      .toBe("game-canvas");
+    await page.keyboard.press("KeyC");
+    await expect
+      .poll(() => page.evaluate(() => document.pointerLockElement === null))
+      .toBe(true);
+  }
+  const ownerCard = page.locator("#owner-card");
+  await expect(ownerCard).toBeVisible();
+  await expect(ownerCard).toHaveAttribute("role", "dialog");
+  await expect(ownerCard).toHaveAttribute("aria-modal", "true");
+  await expect(ownerCard).toHaveAttribute("aria-labelledby", "owner-name");
   await expect(page.locator("#owner-name")).toHaveText(creator.player.nickname);
   await expect(page.locator("#owner-id")).toHaveText(creator.player.publicId);
-  await expect(page.locator("#owner-emblem")).toHaveText(creator.player.emblem);
+  await expect(page.locator("#owner-emblem")).toHaveAttribute(
+    "data-emblem",
+    creator.player.emblem,
+  );
+  await expect(page.locator("#owner-emblem")).toHaveAttribute(
+    "data-creator-crest",
+    expectedCrestKey,
+  );
   await expect(page.locator("#owner-mission-meta")).toContainText("별빛 관문");
+  const ownerToggle = page.locator("#owner-card-toggle");
+  await expect(ownerToggle).toBeVisible();
+  await expect(ownerToggle).toBeFocused();
+  await expect(ownerToggle).toHaveAttribute("aria-expanded", "true");
+  await expect(ownerMore).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#owner-highlight-button")).toBeVisible();
+  await expect(tooltip).toBeHidden();
+  if (touchLayout) {
+    await expect(page.locator("#look-zone")).toBeHidden();
+    await assertMobileLayout(page);
+  } else {
+    await page.keyboard.press("Tab");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.activeElement?.closest("#owner-card")?.id ?? null,
+        ),
+      )
+      .toBe("owner-card");
+    await page.keyboard.press("Shift+Tab");
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          document.activeElement?.closest("#owner-card")?.id ?? null,
+        ),
+      )
+      .toBe("owner-card");
+    await page.keyboard.press("KeyI");
+    await page.keyboard.press("KeyM");
+    await expect(page.locator(".world-panel")).not.toHaveClass(/is-expanded/u);
+    await expect(page.locator("#mission-panel")).toHaveClass(/is-collapsed/u);
+    const isolated = await page.evaluate(() => {
+      const card = document.querySelector("#owner-card");
+      const parent = card?.parentElement;
+      return parent
+        ? [...parent.children]
+            .filter((element) => element !== card)
+            .every((element) => (element as HTMLElement).inert)
+        : false;
+    });
+    expect(isolated).toBe(true);
+  }
+  if (touchLayout) {
+    await ownerToggle.click();
+  } else {
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#pointer-resume-button")).toBeVisible();
+  }
+  await expect(ownerCard).toBeHidden();
+  await expect(ownerMore).toHaveAttribute("aria-expanded", "false");
+  await expect(tooltip).toBeVisible();
+}
+
+async function assertMinimalMobileHud(page: Page): Promise<void> {
+  await expect(page.locator("#world-panel-toggle")).toHaveAttribute(
+    "aria-expanded",
+    "false",
+  );
+  const result = await page.evaluate(() => {
+    const panel = document.querySelector<HTMLElement>(".world-panel");
+    const count = document.querySelector<HTMLElement>("#build-inventory-count");
+    const mission = document.querySelector<HTMLElement>(
+      ".mission-panel.is-collapsed",
+    );
+    if (!panel || !count || !mission) {
+      throw new Error("모바일 최소 HUD 요소가 없습니다.");
+    }
+    const visible = (element: HTMLElement): boolean => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        !element.hidden &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+    const details = [
+      ".world-status-row",
+      ".progress-grid",
+      ".production-status",
+      ".hud-actions",
+      ".manual-stage",
+      ".shortcut-guide",
+    ].map((selector) => {
+      const element = panel.querySelector<HTMLElement>(selector);
+      return element ? visible(element) : true;
+    });
+    const panelRect = panel.getBoundingClientRect();
+    const missionRect = mission.getBoundingClientRect();
+    const profileCopy = document.querySelector<HTMLElement>(".profile-copy");
+    const mobileLabels = [
+      ...document.querySelectorAll<HTMLElement>(".mobile-actions button small"),
+    ];
+    return {
+      panelWidth: panelRect.width,
+      panelHeight: panelRect.height,
+      visibleDetails: details.filter(Boolean).length,
+      inventoryVisible: visible(count) && Boolean(count.textContent?.trim()),
+      missionHeight: missionRect.height,
+      profileCopyVisible: profileCopy ? visible(profileCopy) : false,
+      visibleActionLabels: mobileLabels.filter(visible).length,
+    };
+  });
+  expect(result.panelWidth).toBeLessThanOrEqual(208);
+  expect(result.panelHeight).toBeLessThanOrEqual(54);
+  expect(result.visibleDetails).toBe(0);
+  expect(result.inventoryVisible).toBe(true);
+  expect(result.missionHeight).toBeLessThanOrEqual(52);
+  expect(result.profileCopyVisible).toBe(true);
+  expect(result.visibleActionLabels).toBe(0);
+}
+
+async function exerciseWorldPanelDisclosure(
+  page: Page,
+  screenshotName?: string,
+): Promise<void> {
+  const toggle = page.locator("#world-panel-toggle");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator(".world-panel .progress-grid")).toBeVisible();
+  await expect(page.locator(".world-panel .production-status")).toBeVisible();
+  await expect(page.locator("#manual-production-button")).toBeVisible();
+  await expect(page.locator("#look-zone")).toBeHidden();
+  await assertMobileLayout(page);
+  if (screenshotName) {
+    await page.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, screenshotName),
+      fullPage: true,
+    });
+  }
+  await toggle.click();
+  await assertMinimalMobileHud(page);
+}
+
+async function exercisePaletteDisclosure(page: Page): Promise<void> {
+  const toggle = page.locator("#palette-toggle");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const palette = page.locator("#palette-row");
+  await expect(palette).toBeVisible();
+  await expect(palette.locator(".color-button")).toHaveCount(12);
+  await expect(page.locator("#look-zone")).toBeHidden();
+  const colors = await palette.locator(".color-button").evaluateAll((buttons) =>
+    buttons.map((button) => {
+      const rect = button.getBoundingClientRect();
+      return {
+        width: rect.width,
+        height: rect.height,
+        inside:
+          rect.left >= -1 &&
+          rect.top >= -1 &&
+          rect.right <= innerWidth + 1 &&
+          rect.bottom <= innerHeight + 1,
+      };
+    }),
+  );
+  expect(colors.every(({ width, height }) => width >= 44 && height >= 44)).toBe(
+    true,
+  );
+  expect(colors.every(({ inside }) => inside)).toBe(true);
+  await assertMobileLayout(page);
+  await palette.locator(".color-button").nth(2).click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator("#toast")).toBeHidden({ timeout: 5_000 });
+  await assertMinimalMobileHud(page);
+}
+
+async function exercisePaletteDismissal(page: Page): Promise<void> {
+  const toggle = page.locator("#palette-toggle");
+  const palette = page.locator("#palette-row");
+  const tray = page.locator(".build-tray");
+
+  await toggle.click();
+  await expect(palette).toBeVisible();
+  await page.locator('.tool-button[data-kind="stair"]').click();
+  await expect(palette).toBeHidden();
+  await expect(tray).not.toHaveClass(/is-palette-open/u);
+  await expect(page.locator('.tool-button[data-kind="stair"]')).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  await toggle.click();
+  await page.locator("#analytics-settings-button").click();
+  await expect(palette).toBeHidden();
+  await expect(page.locator("#analytics-settings-overlay")).toBeVisible();
+  await page.locator("#analytics-settings-close").click();
+
+  await toggle.click();
+  await expect(palette).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(palette).toBeHidden();
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+}
+
+async function exerciseOrientationDisclosureReset(page: Page): Promise<void> {
+  const profile = page.getByTestId("profile-status-panel");
+  const profileToggle = page.locator("#world-panel-toggle");
+  const missionToggle = page.locator("#mission-panel-toggle");
+  const paletteToggle = page.locator("#palette-toggle");
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await profileToggle.click();
+  await expect(profile).toHaveClass(/is-expanded/u);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(profile).not.toHaveClass(/is-expanded/u);
+  await expect(profileToggle).toHaveAttribute("aria-expanded", "false");
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await missionToggle.click();
+  await expect(page.locator("#mission-panel")).not.toHaveClass(/is-collapsed/u);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#mission-panel")).toHaveClass(/is-collapsed/u);
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await paletteToggle.click();
+  await expect(page.locator("#palette-row")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator("#palette-row")).toBeHidden();
+  await expect(page.locator("#look-zone")).toBeVisible();
+  await assertMinimalMobileHud(page);
+  await assertMobileLayout(page);
+  await page.setViewportSize({ width: 844, height: 390 });
+}
+
+async function assertProfileStatusComposition(
+  page: Page,
+  bootstrap: PlayerBootstrap,
+): Promise<void> {
+  const profile = page.getByTestId("profile-status-panel");
+  await expect(profile.locator("#player-profile-nickname")).toHaveText(
+    bootstrap.player.nickname,
+  );
+  await expect(profile.locator("#player-profile-public-id")).toHaveText(
+    bootstrap.player.publicId,
+  );
+  await expect(profile.locator("#inventory-count")).toHaveCount(1);
+  await expect(profile.locator("#base-progress")).toHaveCount(1);
+  await expect(profile.locator("#producer-progress")).toHaveCount(1);
+  await expect(profile.locator("#world-panel-toggle")).toHaveCount(1);
+  await expect(profile.locator("#analytics-settings-button")).toHaveCount(0);
+  await expect(page.locator("#analytics-settings-button")).toBeVisible();
+
+  const placement = await page.evaluate(() => {
+    const settings = document.querySelector<HTMLElement>(
+      "#analytics-settings-button",
+    );
+    const panel = document.querySelector<HTMLElement>(
+      '[data-testid="profile-status-panel"]',
+    );
+    if (!settings || !panel) throw new Error("프로필 또는 설정 버튼이 없습니다.");
+    const settingsRect = settings.getBoundingClientRect();
+    const panelRect = panel.getBoundingClientRect();
+    return {
+      topRight:
+        settingsRect.top <= 20 && settingsRect.right >= window.innerWidth - 20,
+      touchSize: settingsRect.width >= 44 && settingsRect.height >= 44,
+      overlaps:
+        settingsRect.left < panelRect.right &&
+        settingsRect.right > panelRect.left &&
+        settingsRect.top < panelRect.bottom &&
+        settingsRect.bottom > panelRect.top,
+    };
+  });
+  expect(placement).toEqual({ topRight: true, touchSize: true, overlaps: false });
+}
+
+async function exerciseMissionPanelDisclosure(page: Page): Promise<void> {
+  const toggle = page.locator("#mission-panel-toggle");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(page.locator("#mission-contribute-button")).toBeVisible();
+  await expect(page.locator("#look-zone")).toBeHidden();
+  await assertMobileLayout(page);
+  await toggle.click();
+  await assertMinimalMobileHud(page);
 }
 
 async function assertMobileLayout(page: Page): Promise<void> {
@@ -581,11 +996,13 @@ async function assertMobileLayout(page: Page): Promise<void> {
       ["joystick", "#joystick"],
       ["mobile-actions", ".mobile-actions"],
       ["mission-panel", "#mission-panel"],
+      ["owner-tooltip", "#owner-tooltip"],
       ["owner-card", "#owner-card"],
       ["highlight-banner", "#highlight-banner"],
-      ["brand-panel", ".brand-panel"],
-      ["world-panel", ".world-panel"],
+      ["profile-status-panel", '[data-testid="profile-status-panel"]'],
+      ["settings-button", "#analytics-settings-button"],
       ["build-tray", ".build-tray"],
+      ["palette", "#palette-row"],
     ] as const;
     const protectedRects = protectedElements.flatMap(([name, selector]) => {
       const rect = visibleRect(selector);
@@ -607,6 +1024,14 @@ async function assertMobileLayout(page: Page): Promise<void> {
     }
     const touchSelectors = [
       "#joystick",
+      "#analytics-settings-button",
+      "#world-panel-toggle",
+      "#mission-panel-toggle",
+      "#owner-tooltip-more",
+      "#owner-card-toggle",
+      ".tool-button",
+      ".color-button",
+      "#palette-toggle",
       "#jump-button",
       "#rotate-button",
       "#remove-button",
@@ -628,7 +1053,7 @@ async function assertMobileLayout(page: Page): Promise<void> {
       .map(({ name }) => name);
     const clippedButtons = [
       ...document.querySelectorAll<HTMLButtonElement>(
-        ".brand-panel button, .world-panel button, .mission-panel button, .owner-card button, .build-tray button, .highlight-banner button, .mobile-actions button",
+        ".brand-panel button, .world-panel button, .mission-panel button, .owner-tooltip button, .owner-card button, .build-tray button, .highlight-banner button, .mobile-actions button",
       ),
     ]
       .filter((button) => {
@@ -646,6 +1071,124 @@ async function assertMobileLayout(page: Page): Promise<void> {
           button.scrollHeight > button.clientHeight + 1,
       )
       .map((button) => button.id || button.getAttribute("aria-label") || "button");
+    const clippedUiChildren = [
+      ...document.querySelectorAll<HTMLElement>(
+        ".brand-panel strong, .brand-panel small, .world-panel strong, .world-panel span, .mission-heading strong, .mission-heading small, .mission-progress-copy strong, .owner-tooltip strong, .owner-tooltip time, .owner-copy strong, .owner-copy span, .build-tray .ui-icon, .mobile-actions .ui-icon",
+      ),
+    ]
+      .filter((element) => {
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      })
+      .filter((element) => {
+        const parent = element.parentElement;
+        if (!parent) return false;
+        const rect = element.getBoundingClientRect();
+        const parentRect = parent.getBoundingClientRect();
+        return (
+          rect.left < parentRect.left - 1 ||
+          rect.right > parentRect.right + 1 ||
+          rect.top < parentRect.top - 1 ||
+          rect.bottom > parentRect.bottom + 1 ||
+          element.scrollWidth > element.clientWidth + 1
+        );
+      })
+      .map((element) => element.id || element.className || element.tagName);
+    const invalidIcons = [
+      ...document.querySelectorAll<SVGSVGElement>(".ui-icon"),
+    ]
+      .filter(
+        (icon) =>
+          icon.getAttribute("viewBox") !== "0 0 24 24" ||
+          icon.getBoundingClientRect().width >
+            (icon.parentElement?.getBoundingClientRect().width ?? 0) + 1 ||
+          icon.getBoundingClientRect().height >
+            (icon.parentElement?.getBoundingClientRect().height ?? 0) + 1,
+      )
+      .map((icon) => icon.dataset["icon"] ?? "icon");
+    const invalidCrests = [
+      ...document.querySelectorAll<SVGSVGElement>(".creator-crest"),
+    ]
+      .filter((crest) => {
+        const rect = crest.getBoundingClientRect();
+        const parentRect = crest.parentElement?.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0 || !parentRect) return false;
+        return (
+          crest.getAttribute("viewBox") !== "0 0 24 24" ||
+          rect.width > parentRect.width + 1 ||
+          rect.height > parentRect.height + 1
+        );
+      })
+      .map((crest) => crest.dataset["creatorCrest"] ?? "crest");
+    const hierarchyClasses = [
+      "ui-button--primary",
+      "ui-button--secondary",
+      "ui-button--danger",
+      "ui-button--quiet",
+    ];
+    const semanticButtonProblems = [
+      ...document.querySelectorAll<HTMLButtonElement>(".game-shell button"),
+    ]
+      .filter(
+        (button) =>
+          !button.classList.contains("ui-button") ||
+          hierarchyClasses.filter((className) =>
+            button.classList.contains(className),
+          ).length !== 1,
+      )
+      .map((button) => button.id || button.getAttribute("aria-label") || "button");
+    const undersizedSemanticButtons = [
+      ...document.querySelectorAll<HTMLButtonElement>(".game-shell .ui-button"),
+    ]
+      .filter((button) => {
+        const rect = button.getBoundingClientRect();
+        const style = getComputedStyle(button);
+        return (
+          !button.hidden &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          (rect.width < 44 || rect.height < 44)
+        );
+      })
+      .map((button) => button.id || button.getAttribute("aria-label") || "button");
+    const collapsedMission = document.querySelector<HTMLElement>(
+      "#mission-panel.is-collapsed",
+    );
+    const collapsedMissionClips = collapsedMission
+      ? collapsedMission.scrollHeight > collapsedMission.clientHeight + 1
+      : false;
+    const quickbarVisible = visibleRect(".build-tray") !== null;
+    const worldMenuExpanded = document
+      .querySelector(".world-panel")
+      ?.classList.contains("is-expanded") ?? false;
+    const ownerDetailsExpanded = document
+      .querySelector(".owner-card")
+      ?.classList.contains("is-expanded") ?? false;
+    const missionDetailsExpanded = !document
+      .querySelector(".mission-panel")
+      ?.classList.contains("is-collapsed");
+    const paletteExpanded = document
+      .querySelector(".build-tray")
+      ?.classList.contains("is-palette-open") ?? false;
+    const inventoryCount = document.querySelector<HTMLElement>(
+      "#build-inventory-count",
+    );
+    const inventoryCountRect = inventoryCount?.getBoundingClientRect();
+    const inventoryCountVisible = Boolean(
+      inventoryCount &&
+        inventoryCount.textContent?.trim() &&
+        inventoryCountRect &&
+        inventoryCountRect.width > 0 &&
+        inventoryCountRect.height > 0 &&
+        getComputedStyle(inventoryCount).visibility !== "hidden",
+    );
     return {
       horizontalOverflow:
         document.documentElement.scrollWidth > window.innerWidth,
@@ -655,8 +1198,24 @@ async function assertMobileLayout(page: Page): Promise<void> {
       undersized,
       outsideViewport,
       clippedButtons,
+      clippedUiChildren,
+      invalidIcons,
+      invalidCrests,
+      semanticButtonProblems,
+      undersizedSemanticButtons,
+      collapsedMissionClips,
+      quickbarVisible,
+      inventoryCountVisible,
+      worldMenuExpanded,
+      ownerDetailsExpanded,
+      missionDetailsExpanded,
+      paletteExpanded,
     };
   });
+  const quickbarExpected =
+    !result.worldMenuExpanded &&
+    !result.ownerDetailsExpanded &&
+    !result.missionDetailsExpanded;
   expect(result).toEqual({
     horizontalOverflow: false,
     verticalOverflow: false,
@@ -664,6 +1223,18 @@ async function assertMobileLayout(page: Page): Promise<void> {
     undersized: [],
     outsideViewport: [],
     clippedButtons: [],
+    clippedUiChildren: [],
+    invalidIcons: [],
+    invalidCrests: [],
+    semanticButtonProblems: [],
+    undersizedSemanticButtons: [],
+    collapsedMissionClips: false,
+    quickbarVisible: quickbarExpected,
+    inventoryCountVisible: quickbarExpected,
+    worldMenuExpanded: result.worldMenuExpanded,
+    ownerDetailsExpanded: result.ownerDetailsExpanded,
+    missionDetailsExpanded: result.missionDetailsExpanded,
+    paletteExpanded: result.paletteExpanded,
   });
 }
 
@@ -895,8 +1466,8 @@ async function readPerformanceSnapshot(page: Page): Promise<{
 }
 
 async function hideDevelopmentPerformanceHud(page: Page): Promise<void> {
-  await page.locator("#performance-hud").evaluate((element) => {
-    (element as HTMLElement).hidden = true;
+  await page.addStyleTag({
+    content: "#performance-hud { display: none !important; }",
   });
 }
 
@@ -911,5 +1482,28 @@ function requiredAnonKey(): string {
     throw new Error("SUPABASE_TEST_ANON_KEY가 필요합니다.");
   }
   return SUPABASE_ANON_KEY;
+}
+
+async function waitForSupabaseReady(anonKey: string): Promise<void> {
+  const deadline = Date.now() + 15_000;
+  let lastStatus = 0;
+  while (Date.now() < deadline) {
+    try {
+      const [auth, rest] = await Promise.all([
+        fetch(`${SUPABASE_URL}/auth/v1/health`),
+        fetch(`${SUPABASE_URL}/rest/v1/`, {
+          headers: { apikey: anonKey },
+        }),
+      ]);
+      lastStatus = Math.min(auth.status, rest.status);
+      if (auth.ok && rest.ok) {
+        return;
+      }
+    } catch {
+      lastStatus = 0;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new Error(`로컬 Supabase 준비 시간 초과 (${lastStatus})`);
 }
 
