@@ -110,6 +110,43 @@ class SharedBrowserStorage implements Storage {
   }
 }
 
+class SharedWebLockManager {
+  private readonly tails = new Map<string, Promise<void>>();
+
+  async request<T>(
+    name: string,
+    options: LockOptions,
+    callback: (lock: Lock | null) => Promise<T>,
+  ): Promise<T> {
+    const previous = this.tails.get(name) ?? Promise.resolve();
+    let release = (): void => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const turn = previous.catch(() => undefined);
+    const tail = turn.then(() => gate);
+    this.tails.set(name, tail);
+
+    await turn;
+    if (options.signal?.aborted) {
+      release();
+      if (this.tails.get(name) === tail) {
+        this.tails.delete(name);
+      }
+      throw new DOMException("잠금 대기 중단", "AbortError");
+    }
+
+    try {
+      return await callback({ name, mode: "exclusive" } as Lock);
+    } finally {
+      release();
+      if (this.tails.get(name) === tail) {
+        this.tails.delete(name);
+      }
+    }
+  }
+}
+
 describe("SupabaseRepository", () => {
   it("모드 선택 전 공개 프로필만 준비한다", async () => {
     const { client, calls } = fakeClient({
@@ -145,8 +182,9 @@ describe("SupabaseRepository", () => {
 
   it("같은 브라우저 저장소의 두 인스턴스가 최초 익명 계정을 하나만 만든다", async () => {
     const storage = new SharedBrowserStorage();
+    const locks = new SharedWebLockManager();
     vi.stubGlobal("window", {});
-    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("navigator", { locks: locks as unknown as LockManager });
     vi.stubGlobal("localStorage", storage);
 
     const shared: {
@@ -205,10 +243,105 @@ describe("SupabaseRepository", () => {
         "#A2B3",
       ]);
       expect(JSON.stringify(identities)).not.toContain("internal-auth-uid");
-      expect(
-        Array.from({ length: storage.length }, (_, index) => storage.key(index)),
-      ).not.toContainEqual(expect.stringContaining(":bakery:"));
+      expect(storage.length).toBe(0);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("가입 타임아웃 뒤 늦은 응답까지 잠금을 유지해 대기 탭과 재시도가 같은 세션을 쓴다", async () => {
+    const storage = new SharedBrowserStorage();
+    const locks = new SharedWebLockManager();
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", { locks: locks as unknown as LockManager });
+    vi.stubGlobal("localStorage", storage);
+
+    let releaseSignup = (): void => undefined;
+    const signupMaySettle = new Promise<void>((resolve) => {
+      releaseSignup = resolve;
+    });
+    const shared: {
+      user: { id: string; is_anonymous: true } | null;
+      signupCount: number;
+    } = { user: null, signupCount: 0 };
+    const makeClient = (): SupabaseClient => {
+      const auth = {
+        getSession: vi.fn(async () => ({
+          data: { session: shared.user ? { user: shared.user } : null },
+          error: null,
+        })),
+        signInAnonymously: vi.fn(async () => {
+          shared.signupCount += 1;
+          await signupMaySettle;
+          const user = {
+            id: "internal-auth-uid-late",
+            is_anonymous: true as const,
+          };
+          shared.user = user;
+          return { data: { user, session: { user } }, error: null };
+        }),
+      };
+      const rpc = vi.fn(async () => ({
+        data: {
+          profile: {
+            public_tag: "#A2B3",
+            nickname: "고요한 여우",
+            emblem: "✦",
+          },
+          server_now: SERVER_NOW,
+        },
+        error: null,
+      }));
+      return { auth, rpc } as unknown as SupabaseClient;
+    };
+
+    try {
+      const first = new SupabaseRepository(makeClient(), {
+        worldId: WORLD_ID,
+        requestTimeoutMs: 5,
+      });
+      const waitingTab = new SupabaseRepository(makeClient(), {
+        worldId: WORLD_ID,
+        requestTimeoutMs: 100,
+      });
+
+      const firstError = await first
+        .getPlayerIdentity(WORLD_ID)
+        .catch((cause: unknown) => cause);
+      expect(firstError).toMatchObject({
+        code: "request-timeout",
+        retryable: true,
+      });
+      expect(shared.signupCount).toBe(1);
+
+      const waitingIdentity = waitingTab.getPlayerIdentity(WORLD_ID);
+      const retriedWhilePending = first
+        .getPlayerIdentity(WORLD_ID)
+        .catch((cause: unknown) => cause);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(shared.signupCount).toBe(1);
+      expect(shared.user).toBeNull();
+      await expect(retriedWhilePending).resolves.toMatchObject({
+        code: "request-timeout",
+        retryable: true,
+      });
+
+      releaseSignup();
+      const secondResult = await waitingIdentity;
+      const retriedResult = await first.getPlayerIdentity(WORLD_ID);
+
+      expect(shared.signupCount).toBe(1);
+      expect(shared.user?.id).toBe("internal-auth-uid-late");
+      expect([secondResult, retriedResult].map(({ player }) => player.publicId)).toEqual([
+        "#A2B3",
+        "#A2B3",
+      ]);
+      expect(JSON.stringify([secondResult, retriedResult])).not.toContain(
+        "internal-auth-uid",
+      );
+      expect(storage.length).toBe(0);
+    } finally {
+      releaseSignup();
       vi.unstubAllGlobals();
     }
   });

@@ -549,14 +549,14 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
       return existing;
     }
 
-    return withAuthSessionLock(
+    const coordinatedAuthentication = withAuthSessionLock(
       this.authLockName,
       this.requestTimeoutMs,
       async () => {
         // This second read and the signup are one cross-tab critical section,
         // so a waiting tab reuses the account created by the winner.
         const created = await this.authenticateOnce();
-        const persisted = await this.readAnonymousSession();
+        const persisted = await this.readAnonymousSession(false);
         if (!persisted) {
           throw new RepositoryRequestError(
             "익명 계정 저장을 확인하지 못했습니다. 다시 시도해 주세요.",
@@ -572,13 +572,22 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
         return persisted;
       },
     );
-  }
-
-  private async readAnonymousSession(): Promise<User | null> {
-    const current = await withRequestTimeout(
-      this.client.auth.getSession(),
+    // Bound only what the initiating UI waits for. The coordinated promise
+    // intentionally keeps running after this timeout, so Web Locks ownership
+    // is retained until getSession/signup/recheck actually settle.
+    return withRequestTimeout(
+      coordinatedAuthentication,
       this.requestTimeoutMs,
     );
+  }
+
+  private async readAnonymousSession(
+    boundCallerWait = true,
+  ): Promise<User | null> {
+    const request = this.client.auth.getSession();
+    const current = boundCallerWait
+      ? await withRequestTimeout(request, this.requestTimeoutMs)
+      : await request;
     if (current.error) {
       throw repositoryError("익명 세션을 확인하지 못했습니다.", current.error);
     }
@@ -588,23 +597,14 @@ export class SupabaseRepository implements CollaborativeWorldRepository {
   }
 
   private async authenticateOnce(): Promise<User> {
-    const current = await withRequestTimeout(
-      this.client.auth.getSession(),
-      this.requestTimeoutMs,
-    );
-    if (current.error) {
-      throw repositoryError("익명 세션을 확인하지 못했습니다.", current.error);
-    }
-    if (current.data.session?.user) {
-      return assertAnonymousUser(current.data.session.user);
+    const current = await this.readAnonymousSession(false);
+    if (current) {
+      return current;
     }
 
     // 익명 가입 자체에는 클라이언트 멱등 키가 없으므로 자동 재시도하지 않는다.
-    // 응답 유실 뒤에는 Supabase가 저장한 세션을 다음 bootstrap에서 재사용한다.
-    const signedIn = await withRequestTimeout(
-      this.client.auth.signInAnonymously(),
-      this.requestTimeoutMs,
-    );
+    // 실제 Promise가 settle할 때까지 Web Lock 콜백 안에서 기다린다.
+    const signedIn = await this.client.auth.signInAnonymously();
     if (signedIn.error || !signedIn.data.user) {
       throw repositoryError(
         "익명 계정을 만들지 못했습니다.",
