@@ -74,6 +74,7 @@ export function renderBootFailure(
   message.textContent = description.message;
   const button = document.createElement("button");
   button.type = "button";
+  button.className = "ui-button ui-button--primary";
   button.textContent = "다시 시도";
   button.addEventListener("click", retry);
   section.append(title, message, button);

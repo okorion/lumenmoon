@@ -1,11 +1,18 @@
 ﻿import {
   PALETTE,
+  type BlockOwner,
   type BlockKind,
   type BlockRotation,
   type VoxelBlock,
 } from "../domain/types";
 import type { AnalyticsConsentChoice } from "../analytics/types";
 import { missionGlowFromFilledSlots } from "../domain/mission";
+import {
+  creatorCrestLabel,
+  creatorCrestSvg,
+  setCreatorCrest,
+  uiIcon,
+} from "./icons";
 
 export interface BuildSelection {
   kind: BlockKind;
@@ -111,6 +118,14 @@ export class GameUI {
   private readonly storageDescription: HTMLElement;
   private readonly worldPanel: HTMLElement;
   private readonly worldPanelToggle: HTMLButtonElement;
+  private readonly playerProfileCrest: HTMLElement;
+  private readonly playerProfileNickname: HTMLElement;
+  private readonly playerProfilePublicId: HTMLElement;
+  private readonly ownerTooltip: HTMLElement;
+  private readonly ownerTooltipCrest: HTMLElement;
+  private readonly ownerTooltipName: HTMLElement;
+  private readonly ownerTooltipDate: HTMLTimeElement;
+  private readonly ownerTooltipMore: HTMLButtonElement;
   private readonly ownerCard: HTMLElement;
   private readonly ownerEmblem: HTMLElement;
   private readonly ownerName: HTMLElement;
@@ -119,6 +134,7 @@ export class GameUI {
   private readonly ownerInstalledAt: HTMLElement;
   private readonly ownerMissionMeta: HTMLElement;
   private readonly ownerActions: HTMLElement;
+  private readonly ownerCardToggle: HTMLButtonElement;
   private readonly ownerHighlightButton: HTMLButtonElement;
   private readonly ownerFindButton: HTMLButtonElement;
   private readonly actionHint: HTMLElement;
@@ -154,6 +170,7 @@ export class GameUI {
   private readonly missionFloor: HTMLElement;
   private readonly missionTitle: HTMLElement;
   private readonly missionStage: HTMLElement;
+  private readonly missionStageValue: HTMLElement;
   private readonly missionProgressBar: HTMLElement;
   private readonly missionProgressLabel: HTMLElement;
   private readonly missionMyContribution: HTMLElement;
@@ -191,10 +208,16 @@ export class GameUI {
   private archiveEntries: readonly CompletedMissionArchiveEntry[] = [];
   private archiveReturnFocus: HTMLElement | null = null;
   private analyticsReturnFocus: HTMLElement | null = null;
+  private highlightedOwner: { publicId: string; nickname: string } | null = null;
+  private ownerTargetPresent = false;
+  private ownerDetailsReturnFocus: HTMLElement | null = null;
+  private ownerDetailsOpenHandler: () => void = () => {};
+  private ownerModalInertElements: HTMLElement[] = [];
   private analyticsConsentChoice: AnalyticsConsentChoice = "undecided";
   private fatalRetryAction: () => void = () => window.location.reload();
   private recoveryRetryAction: (() => void) | null = null;
   private hasEnteredWorld = false;
+  private layoutOrientation = currentLayoutOrientation();
   private selection: BuildSelection = {
     kind: "cube",
     colorIndex: 6,
@@ -206,33 +229,41 @@ export class GameUI {
       '<section class="game-shell" aria-label="루멘문 게임">',
       '<canvas id="game-canvas" tabindex="0" aria-label="3D 공동 건축 월드"></canvas>',
       '<div class="sky-vignette" aria-hidden="true"></div>',
-      '<header class="brand-panel glass">',
-      '<span class="brand-mark" aria-hidden="true">✦</span>',
-      '<div><strong>루멘문</strong><small id="world-mode">LOCAL WORLD · 01</small></div>',
-      '<button id="analytics-settings-button" class="analytics-settings-button" type="button" aria-label="개인정보와 익명 통계 설정 열기" title="개인정보와 통계 설정">',
-      '<span aria-hidden="true">⚙</span><i aria-hidden="true"></i></button>',
+      '<aside class="profile-status-panel world-panel glass" data-testid="profile-status-panel" aria-label="내 프로필과 건축 상태">',
+      '<header class="brand-panel">',
+      '<span id="player-profile-crest" class="profile-crest" data-emblem="✦" role="img" aria-label="고요한 여우 #B7K2 제작자 표식, 별 문양">' + creatorCrestSvg({ publicId: "#B7K2", nickname: "고요한 여우", emblem: "✦" }) + '</span>',
+      '<div class="profile-copy"><strong id="player-profile-nickname">고요한 여우</strong><small><span id="player-profile-public-id">#B7K2</span><span id="world-mode">LOCAL WORLD · 01</span></small></div>',
+      '<button id="world-panel-toggle" class="world-panel-toggle ui-button ui-button--quiet ui-button--icon ui-button--toggle" type="button" aria-controls="profile-status-details" aria-expanded="false" aria-label="내 프로필과 건축 상태 열기" title="프로필 · 블록 · 거점 · 생산 (I)">' + uiIcon("inventory") + '<kbd aria-hidden="true">I</kbd></button>',
       '</header>',
-      '<aside class="world-panel glass" aria-label="인벤토리와 현재 상태">',
-      '<button id="world-panel-toggle" class="world-panel-toggle" type="button" aria-expanded="false" aria-label="인벤토리와 단축키 열기" title="인벤토리 · 단축키 (I)">⌄</button>',
+      '<div id="profile-status-details" class="profile-status-details">',
       '<div class="world-status-row"><span id="save-state" class="status-dot">저장 준비</span>',
       '<span id="player-state">베이 01</span></div>',
       '<div class="progress-grid">',
-      '<span title="보유 블록"><i class="status-icon status-icon-block" aria-hidden="true">◆</i><small>블록</small><strong id="inventory-count">24</strong></span>',
-      '<span title="개인 거점"><i class="status-icon" aria-hidden="true">⌂</i><small>거점</small><strong id="base-progress">0/16</strong></span>',
-      '<span title="생산시설"><i class="status-icon" aria-hidden="true">⚙</i><small>시설</small><strong id="producer-progress">0/8</strong></span>',
-      '<span title="생산시설 단계"><i class="status-icon" aria-hidden="true">✦</i><small>단계</small><strong id="producer-level">Lv.1</strong></span>',
+      '<span class="status-inventory" title="보유 블록" aria-label="보유 블록 24개"><i class="status-icon status-icon-block" aria-hidden="true">' + uiIcon("cube") + '</i><small>블록</small><strong id="inventory-count">24</strong></span>',
+      '<span title="개인 거점" aria-label="개인 거점 0/16"><i class="status-icon" aria-hidden="true">' + uiIcon("base") + '</i><small>거점</small><strong id="base-progress">0/16</strong></span>',
+      '<span title="생산시설" aria-label="생산시설 0/8"><i class="status-icon" aria-hidden="true">' + uiIcon("producer") + '</i><small>시설</small><strong id="producer-progress">0/8</strong></span>',
+      '<span title="생산시설 단계" aria-label="생산시설 레벨 1"><i class="status-icon" aria-hidden="true">' + uiIcon("glow") + '</i><small>단계</small><strong id="producer-level">Lv.1</strong></span>',
       '</div>',
       '<div class="production-status"><span id="next-automatic">자동 생산 준비 중</span>',
       '<span id="manual-remaining">수동 3회 남음</span></div>',
       '<div class="hud-actions">',
-      '<button id="manual-production-button" data-testid="manual-production" type="button" title="수동 생산 단축키 F">수동 생산</button>',
-      '<button id="reset-bay-button" data-testid="reset-bay" type="button" title="베이 초기화 단축키 X">내 베이 다시 시작</button>',
+      '<button id="manual-production-button" class="ui-button ui-button--primary" data-testid="manual-production" type="button" title="수동 생산 단축키 F">수동 생산</button>',
+      '<button id="reset-bay-button" class="ui-button ui-button--danger" data-testid="reset-bay" type="button" title="베이 초기화 단축키 X">내 베이 다시 시작</button>',
       '</div>',
       '<div id="manual-stage" class="manual-stage" role="status" aria-live="polite" hidden></div>',
       '<dl class="shortcut-guide" aria-label="키보드 단축키"><div><dt>건축</dt><dd>1/2/3 · Q/E · R</dd></div><div><dt>기능</dt><dd>F 생산 · X 초기화 · I 인벤토리 · M 미션</dd></div></dl>',
+      '</div>',
       '</aside>',
-      '<div id="owner-card" class="owner-card glass" data-testid="owner-card" hidden>',
-      '<span id="owner-emblem" class="owner-emblem">✦</span>',
+      '<button id="analytics-settings-button" class="analytics-settings-button floating-settings ui-button ui-button--quiet ui-button--icon" type="button" aria-label="개인정보와 익명 통계 설정 열기" title="개인정보와 통계 설정">',
+      '<span aria-hidden="true">' + uiIcon("settings") + '</span><i aria-hidden="true"></i></button>',
+      '<div id="owner-tooltip" class="owner-tooltip glass" role="group" aria-label="조준한 블록의 제작자" hidden>',
+      '<span id="owner-tooltip-crest" class="owner-tooltip-crest" data-emblem="✦" role="img" aria-label="고요한 여우 #B7K2 제작자 표식, 별 문양">' + creatorCrestSvg({ publicId: "#B7K2", nickname: "고요한 여우", emblem: "✦" }) + '</span>',
+      '<strong id="owner-tooltip-name">고요한 여우</strong>',
+      '<time id="owner-tooltip-date">설치일 미상</time>',
+      '<button id="owner-tooltip-more" class="ui-button ui-button--quiet ui-button--compact" type="button" aria-controls="owner-card" aria-expanded="false" aria-label="제작자 상세 열기" title="제작자 상세 · C">더보기<kbd aria-hidden="true">C</kbd></button>',
+      '</div>',
+      '<section id="owner-card" class="owner-card glass" data-testid="owner-card" role="dialog" aria-modal="true" aria-labelledby="owner-name" hidden>',
+      '<span id="owner-emblem" class="owner-emblem" data-emblem="✦" role="img" aria-label="고요한 여우 #B7K2 제작자 표식, 별 문양">' + creatorCrestSvg({ publicId: "#B7K2", nickname: "고요한 여우", emblem: "✦" }) + '</span>',
       '<div class="owner-copy"><small>이 블록을 만든 사람</small>',
       '<strong id="owner-name">고요한 여우</strong>',
       '<span id="owner-id">#B7K2</span>',
@@ -240,15 +271,16 @@ export class GameUI {
       '<span id="owner-installed-at" class="owner-installed-at"></span>',
       '<span id="owner-mission-meta" class="owner-mission-meta" hidden></span>',
       '<div class="owner-actions" hidden>',
-      '<button id="owner-highlight-button" type="button">이 제작자의 블록 강조</button>',
-      '<button id="owner-find-button" type="button">찾아가기</button>',
+      '<button id="owner-highlight-button" class="ui-button ui-button--primary ui-button--toggle" type="button">이 제작자의 블록 강조</button>',
+      '<button id="owner-find-button" class="ui-button ui-button--secondary" type="button">찾아가기</button>',
       '</div></div>',
-      '</div>',
+      '<button id="owner-card-toggle" class="owner-card-toggle ui-button ui-button--quiet ui-button--icon" type="button" aria-expanded="false" aria-label="제작자 상세 닫기">' + uiIcon("close") + '</button>',
+      '</section>',
       '<aside id="mission-panel" class="mission-panel glass is-collapsed" aria-label="공동 미션" hidden>',
-      '<div class="mission-heading"><div><small id="mission-floor">별빛 관문 · 1층</small>',
+      '<div class="mission-heading"><div class="mission-heading-copy"><small id="mission-floor">별빛 관문 · 1층</small>',
       '<strong id="mission-title">별빛 관문</strong></div>',
-      '<div class="mission-heading-actions"><span id="mission-stage" class="mission-stage">✦ 0%</span>',
-      '<button id="mission-panel-toggle" class="mission-panel-toggle" type="button" aria-expanded="false" aria-label="공동 미션 상세 열기" title="미션 상세">⌄</button></div></div>',
+      '<div class="mission-heading-actions"><span id="mission-stage" class="mission-stage"><i aria-hidden="true">' + uiIcon("mission") + '</i><strong id="mission-stage-value">0%</strong></span>',
+      '<button id="mission-panel-toggle" class="mission-panel-toggle ui-button ui-button--quiet ui-button--icon ui-button--toggle" type="button" aria-expanded="false" aria-label="공동 미션 상세 열기" title="미션 상세">' + uiIcon("chevron") + '</button></div></div>',
       '<div class="mission-progress" aria-label="미션 진행률"><i id="mission-progress-bar"></i></div>',
       '<div class="mission-progress-copy"><strong id="mission-progress-label">0% · 0/24</strong>',
       '<span id="mission-contribution-status">추천 위치를 선택하세요</span></div>',
@@ -263,66 +295,66 @@ export class GameUI {
       '<div id="mission-slot-choices" class="mission-slot-choices"></div></section>',
       '<section class="mission-choice" aria-label="미션 색상"><small>별빛 팔레트 · 5색</small>',
       '<div id="mission-palette-choices" class="mission-palette-choices"></div></section>',
-      '<button id="mission-contribute-button" class="mission-contribute-button" type="button">선택한 위치에 1블록 기여</button>',
+      '<button id="mission-contribute-button" class="mission-contribute-button ui-button ui-button--primary" type="button">선택한 위치에 1블록 기여</button>',
       '<section id="contributor-lights" class="contributor-lights" aria-label="기여자의 빛" hidden>',
       '<div class="contributor-lights-heading"><strong>기여자의 빛</strong><small>모든 빛은 같은 크기예요</small></div>',
       '<div id="contributor-light-list" class="contributor-light-list"></div></section>',
       '<div class="mission-panel-actions">',
-      '<button id="mission-highlight-mine" type="button">내 블록 강조</button>',
-      '<button id="mission-archive-button" type="button">기록관 열기</button>',
+      '<button id="mission-highlight-mine" class="ui-button ui-button--secondary ui-button--toggle" type="button">내 블록 강조</button>',
+      '<button id="mission-archive-button" class="ui-button ui-button--quiet" type="button">기록관 열기</button>',
       '</div></div></aside>',
       '<div id="highlight-banner" class="highlight-banner glass" role="status" hidden>',
       '<span id="highlight-label">제작자 블록을 강조하고 있어요</span>',
-      '<button id="highlight-find-button" class="highlight-find" type="button" hidden>찾아가기</button>',
-      '<button id="highlight-clear-button" type="button">강조 해제</button></div>',
-      '<button id="cinematic-skip-button" class="cinematic-skip glass" type="button" hidden>완성 연출 건너뛰기</button>',
+      '<button id="highlight-find-button" class="highlight-find ui-button ui-button--secondary ui-button--compact" type="button" hidden>찾아가기</button>',
+      '<button id="highlight-clear-button" class="ui-button ui-button--quiet ui-button--compact" type="button">강조 해제</button></div>',
+      '<button id="cinematic-skip-button" class="cinematic-skip glass ui-button ui-button--quiet ui-button--compact" type="button" hidden>완성 연출 건너뛰기</button>',
       '<div class="crosshair" aria-hidden="true"><span></span><span></span></div>',
       '<div id="action-hint" class="action-hint glass">블록을 조준해 보세요</div>',
       '<div id="removal-hold" class="removal-hold glass" hidden><span>공용 블록 해체</span><i id="removal-hold-bar"></i></div>',
-      '<section class="build-tray glass" aria-label="건축 도구">',
+      '<section class="build-tray glass" aria-label="블록 모양과 색상">',
       '<div class="kind-row" role="group" aria-label="블록 모양">',
-      '<button type="button" class="tool-button is-selected" data-kind="cube" aria-label="큐브">■</button>',
-      '<button type="button" class="tool-button" data-kind="stair" aria-label="계단">◩</button>',
-      '<button type="button" class="tool-button" data-kind="light" aria-label="조명">✦</button>',
+      '<button type="button" class="tool-button ui-button ui-button--secondary ui-button--toggle ui-button--icon is-selected" data-kind="cube" aria-pressed="true" aria-label="큐브" title="큐브 · 1">' + uiIcon("cube") + '<kbd aria-hidden="true">1</kbd></button>',
+      '<button type="button" class="tool-button ui-button ui-button--secondary ui-button--toggle ui-button--icon" data-kind="stair" aria-pressed="false" aria-label="계단" title="계단 · 2">' + uiIcon("stair") + '<kbd aria-hidden="true">2</kbd></button>',
+      '<button type="button" class="tool-button ui-button ui-button--secondary ui-button--toggle ui-button--icon" data-kind="light" aria-pressed="false" aria-label="조명" title="조명 · 3">' + uiIcon("lamp") + '<kbd aria-hidden="true">3</kbd></button>',
       '</div>',
-      '<button id="palette-toggle" class="palette-toggle" type="button" aria-expanded="false" aria-label="색상 팔레트 열기" title="색상 선택 · Q/E"><i id="selected-color-swatch" aria-hidden="true"></i></button>',
-      '<div id="palette-row" class="palette-row" role="group" aria-label="색상" hidden></div>',
-      '<span class="block-stack" aria-label="보유 블록"><i aria-hidden="true">◆</i><strong id="build-inventory-count">24</strong></span>',
+      '<button id="palette-toggle" class="palette-toggle ui-button ui-button--secondary ui-button--toggle ui-button--icon" type="button" aria-controls="palette-row" aria-expanded="false" aria-label="블록 색상 선택 열기" title="블록 색상 선택 · Q/E"><i id="selected-color-swatch" aria-hidden="true"></i></button>',
+      '<div id="palette-row" class="palette-row" role="group" aria-label="블록 색상" hidden><strong class="palette-heading">블록 색상</strong></div>',
+      '<span class="block-stack" aria-label="보유 블록 24개"><i aria-hidden="true">' + uiIcon("cube") + '</i><strong id="build-inventory-count">24</strong></span>',
       '<span id="selected-label" class="selected-label sr-only">민트 · 큐브 · 0° · 1/2/3 모양 · Q/E 색 · R 회전</span>',
       '</section>',
       '<div id="look-zone" class="look-zone" aria-hidden="true"></div>',
       '<div class="mobile-controls" aria-label="모바일 조작">',
       '<div id="joystick" class="joystick" aria-label="이동 조이스틱"><span id="joystick-knob"></span></div>',
       '<div class="mobile-actions">',
-      '<button id="jump-button" type="button" aria-label="점프">↑</button>',
-      '<button id="rotate-button" type="button" aria-label="블록 회전">↻</button>',
-      '<button id="remove-button" class="danger" type="button" aria-label="내 블록 제거">−</button>',
-      '<button id="place-button" class="primary" type="button" aria-label="블록 배치">＋</button>',
+      '<button id="jump-button" class="ui-button ui-button--secondary ui-button--icon" type="button" aria-label="점프">' + uiIcon("jump") + '<small aria-hidden="true">점프</small></button>',
+      '<button id="rotate-button" class="ui-button ui-button--secondary ui-button--icon" type="button" aria-label="블록 회전">' + uiIcon("rotate") + '<small aria-hidden="true">회전</small></button>',
+      '<button id="remove-button" class="ui-button ui-button--danger ui-button--icon" type="button" aria-label="내 블록 제거">' + uiIcon("remove") + '<small aria-hidden="true">해체</small></button>',
+      '<button id="place-button" class="ui-button ui-button--primary ui-button--icon" type="button" aria-label="블록 배치">' + uiIcon("place") + '<small aria-hidden="true">설치</small></button>',
       '</div></div>',
       '<div id="toast" class="toast glass" role="status" aria-live="polite" hidden></div>',
       '<section id="recovery-notice" class="recovery-notice glass" role="alert" hidden>',
       '<div><strong id="recovery-title">연결을 확인해 주세요</strong><span id="recovery-message"></span></div>',
-      '<button id="recovery-retry-button" type="button">다시 시도</button></section>',
+      '<button id="recovery-retry-button" class="ui-button ui-button--primary" type="button">다시 시도</button></section>',
       '<output id="performance-hud" class="performance-hud" aria-label="개발 성능 정보" hidden></output>',
       '<section id="start-overlay" class="start-overlay">',
       '<div class="start-card glass">',
       '<span class="eyebrow">비동기 공동 건축 실험</span>',
       '<h1>별빛을 잇고<br><em>루멘문을 완성하세요.</em></h1>',
       '<p id="start-description">WASD 이동 · 클릭 배치 · 1/2/3 모양 · Q/E 색 · R 회전 · I 인벤토리 · M 미션</p>',
-      '<button id="start-button" data-testid="start-button" type="button">월드 들어가기 <span>→</span></button>',
-      '<button id="analytics-start-settings-button" class="analytics-start-settings-button" type="button">개인정보 · 통계 설정</button>',
+      '<button id="start-button" class="ui-button ui-button--primary" data-testid="start-button" type="button"><span>월드 들어가기</span>' + uiIcon("enter") + '</button>',
+      '<button id="analytics-start-settings-button" class="analytics-start-settings-button ui-button ui-button--quiet" type="button">개인정보 · 통계 설정</button>',
       '<small id="storage-description">저장 위치: 이 브라우저의 IndexedDB</small>',
       '</div></section>',
-      '<button id="pointer-resume-button" class="pointer-resume glass" type="button" hidden>캔버스를 클릭해 시점 계속</button>',
+      '<button id="pointer-resume-button" class="pointer-resume glass ui-button ui-button--secondary ui-button--compact" type="button" hidden>캔버스를 클릭해 시점 계속</button>',
       '<section id="fatal-overlay" class="fatal-overlay" hidden>',
-      '<div class="fatal-card glass"><span>!</span><h2 id="fatal-title">화면을 열 수 없습니다</h2>',
-      '<p id="fatal-message"></p><button id="fatal-retry-button" type="button">다시 시도</button></div>',
+      '<div class="fatal-card glass"><span aria-hidden="true">' + uiIcon("alert") + '</span><h2 id="fatal-title">화면을 열 수 없습니다</h2>',
+      '<p id="fatal-message"></p><button id="fatal-retry-button" class="ui-button ui-button--primary" type="button">다시 시도</button></div>',
       '</section>',
       '<section id="mission-archive-overlay" class="mission-archive-overlay" role="dialog" aria-modal="true" aria-labelledby="mission-archive-title" hidden>',
       '<div class="mission-archive-shell glass">',
       '<header><div><span class="eyebrow">완성된 공동 건축</span><h2 id="mission-archive-title">별빛 기록관</h2>',
       '<p>점수 순위 없이, 완성 당시 모든 참여자의 빛을 보존합니다.</p></div>',
-      '<button id="mission-archive-close" type="button" aria-label="기록관 닫기">닫기</button></header>',
+      '<button id="mission-archive-close" class="ui-button ui-button--quiet" type="button" aria-label="기록관 닫기">닫기</button></header>',
       '<div id="mission-archive-list" class="mission-archive-list"></div>',
       '</div></section>',
       '<section id="analytics-settings-overlay" class="analytics-settings-overlay" role="dialog" aria-modal="true" aria-labelledby="analytics-settings-title" aria-describedby="analytics-settings-description" hidden>',
@@ -330,17 +362,17 @@ export class GameUI {
       '<header><div><span class="eyebrow">개인정보 선택</span>',
       '<h2 id="analytics-settings-title">익명 이용 통계</h2>',
       '<p id="analytics-settings-description">게임 개선을 위한 최소 통계만 선택적으로 보냅니다. 선택하지 않아도 모든 게임 기능을 이용할 수 있어요.</p></div>',
-      '<button id="analytics-settings-close" type="button" aria-label="통계 설정 닫기">닫기</button></header>',
+      '<button id="analytics-settings-close" class="ui-button ui-button--quiet" type="button" aria-label="통계 설정 닫기">닫기</button></header>',
       '<div class="analytics-settings-content">',
       '<section class="analytics-consent-section" aria-labelledby="analytics-consent-heading">',
       '<div class="analytics-consent-heading"><div><h3 id="analytics-consent-heading">현재 선택</h3>',
       '<p id="analytics-consent-status" role="status" aria-live="polite">선택 전 · 통계를 보내지 않아요</p></div></div>',
       '<div class="analytics-consent-choices">',
-      '<button id="analytics-allowed-button" class="analytics-consent-choice" type="button" aria-pressed="false">',
-      '<span aria-hidden="true">✓</span><span><strong>익명 이용 통계 허용</strong>',
+      '<button id="analytics-allowed-button" class="analytics-consent-choice ui-button ui-button--secondary ui-button--toggle" type="button" aria-pressed="false">',
+      '<span aria-hidden="true">' + uiIcon("check") + '</span><span><strong>익명 이용 통계 허용</strong>',
       '<small>세션 시작·최초 이정표·5분 단위 집계·허용된 오류 코드만 보냅니다.</small></span></button>',
-      '<button id="analytics-essential-button" class="analytics-consent-choice" type="button" aria-pressed="false">',
-      '<span aria-hidden="true">×</span><span><strong>필수 데이터만</strong>',
+      '<button id="analytics-essential-button" class="analytics-consent-choice ui-button ui-button--secondary ui-button--toggle" type="button" aria-pressed="false">',
+      '<span aria-hidden="true">' + uiIcon("close") + '</span><span><strong>필수 데이터만</strong>',
       '<small>PostHog에 보내지 않습니다. 월드 저장에 필요한 게임 데이터만 유지합니다.</small></span></button>',
       '</div></section>',
       '<section id="analytics-privacy-notice" class="analytics-privacy-notice" aria-labelledby="analytics-privacy-title">',
@@ -398,6 +430,42 @@ export class GameUI {
       "#world-panel-toggle",
       HTMLButtonElement,
     );
+    this.playerProfileCrest = requiredElement(
+      root,
+      "#player-profile-crest",
+      HTMLElement,
+    );
+    this.playerProfileNickname = requiredElement(
+      root,
+      "#player-profile-nickname",
+      HTMLElement,
+    );
+    this.playerProfilePublicId = requiredElement(
+      root,
+      "#player-profile-public-id",
+      HTMLElement,
+    );
+    this.ownerTooltip = requiredElement(root, "#owner-tooltip", HTMLElement);
+    this.ownerTooltipCrest = requiredElement(
+      root,
+      "#owner-tooltip-crest",
+      HTMLElement,
+    );
+    this.ownerTooltipName = requiredElement(
+      root,
+      "#owner-tooltip-name",
+      HTMLElement,
+    );
+    this.ownerTooltipDate = requiredElement(
+      root,
+      "#owner-tooltip-date",
+      HTMLTimeElement,
+    );
+    this.ownerTooltipMore = requiredElement(
+      root,
+      "#owner-tooltip-more",
+      HTMLButtonElement,
+    );
     this.ownerCard = requiredElement(root, "#owner-card", HTMLElement);
     this.ownerEmblem = requiredElement(root, "#owner-emblem", HTMLElement);
     this.ownerName = requiredElement(root, "#owner-name", HTMLElement);
@@ -414,6 +482,11 @@ export class GameUI {
       HTMLElement,
     );
     this.ownerActions = requiredElement(root, ".owner-actions", HTMLElement);
+    this.ownerCardToggle = requiredElement(
+      root,
+      "#owner-card-toggle",
+      HTMLButtonElement,
+    );
     this.ownerHighlightButton = requiredElement(
       root,
       "#owner-highlight-button",
@@ -489,6 +562,11 @@ export class GameUI {
     this.missionFloor = requiredElement(root, "#mission-floor", HTMLElement);
     this.missionTitle = requiredElement(root, "#mission-title", HTMLElement);
     this.missionStage = requiredElement(root, "#mission-stage", HTMLElement);
+    this.missionStageValue = requiredElement(
+      root,
+      "#mission-stage-value",
+      HTMLElement,
+    );
     this.missionProgressBar = requiredElement(
       root,
       "#mission-progress-bar",
@@ -622,7 +700,27 @@ export class GameUI {
     this.updateSelectedLabel();
     this.updateTouchCopy();
     this.setAnalyticsConsent("undecided");
-    window.addEventListener("resize", () => this.updateTouchCopy());
+    window.addEventListener("resize", () => this.handleViewportChange());
+    window.addEventListener("orientationchange", () =>
+      this.handleViewportChange(),
+    );
+    document.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (this.paletteRow.hidden) {
+          return;
+        }
+        const target = event.target;
+        if (
+          target instanceof Node &&
+          (this.paletteRow.contains(target) || this.paletteToggle.contains(target))
+        ) {
+          return;
+        }
+        this.closePalette();
+      },
+      true,
+    );
     this.archiveCloseButton.addEventListener("click", () => {
       this.closeMissionArchive();
     });
@@ -648,6 +746,12 @@ export class GameUI {
     this.worldPanelToggle.addEventListener("click", () => {
       this.toggleWorldPanel();
     });
+    this.ownerCardToggle.addEventListener("click", () => {
+      this.closeOwnerDetails();
+    });
+    this.ownerTooltipMore.addEventListener("click", () => {
+      this.openOwnerDetails();
+    });
     this.missionPanelToggle.addEventListener("click", () => {
       this.toggleMissionPanel();
     });
@@ -661,6 +765,35 @@ export class GameUI {
       this.recoveryRetryAction?.();
     });
     window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && this.isOwnerCardExpanded) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.closeOwnerDetails();
+        return;
+      }
+      if (event.key === "Escape" && this.isPaletteExpanded) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.closePalette();
+        return;
+      }
+      if (this.isOwnerCardExpanded) {
+        if (event.key === "Tab") {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          this.cycleOwnerDetailsFocus(event.shiftKey);
+          return;
+        }
+        if (
+          event.code === "KeyI" ||
+          event.code === "KeyM" ||
+          event.code === "KeyC"
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
+      }
       if (event.code === "KeyI" && !isEditableTarget(event.target)) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -673,6 +806,16 @@ export class GameUI {
         event.stopImmediatePropagation();
         releasePointerLockForDialog();
         this.toggleMissionPanel();
+        return;
+      }
+      if (
+        event.code === "KeyC" &&
+        !isEditableTarget(event.target) &&
+        this.ownerTargetPresent
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.openOwnerDetails();
         return;
       }
       if (event.key === "Escape" && !this.analyticsSettingsOverlay.hidden) {
@@ -738,6 +881,7 @@ export class GameUI {
     if (!this.analyticsSettingsOverlay.hidden) {
       return;
     }
+    this.closeTransientHudPanels();
     this.closeMissionArchive();
     if (document.pointerLockElement) {
       document.exitPointerLock();
@@ -767,6 +911,22 @@ export class GameUI {
 
   get isAnalyticsSettingsOpen(): boolean {
     return !this.analyticsSettingsOverlay.hidden;
+  }
+
+  get isWorldPanelExpanded(): boolean {
+    return this.worldPanel.classList.contains("is-expanded");
+  }
+
+  get isOwnerCardExpanded(): boolean {
+    return this.ownerCard.classList.contains("is-expanded");
+  }
+
+  get isMissionPanelExpanded(): boolean {
+    return !this.missionPanel.classList.contains("is-collapsed");
+  }
+
+  get isPaletteExpanded(): boolean {
+    return !this.paletteRow.hidden;
   }
 
   bindResetBay(handler: () => void): void {
@@ -811,7 +971,9 @@ export class GameUI {
   selectKind(kind: BlockKind): Readonly<BuildSelection> {
     this.selection = { ...this.selection, kind };
     document.querySelectorAll<HTMLElement>("[data-kind]").forEach((item) => {
-      item.classList.toggle("is-selected", item.dataset["kind"] === kind);
+      const selected = item.dataset["kind"] === kind;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-pressed", String(selected));
     });
     this.updateSelectedLabel();
     return this.selection;
@@ -840,7 +1002,8 @@ export class GameUI {
     }
     this.startDescription.textContent =
       "화면을 클릭해 시점을 다시 연결하세요. 잠금 중 F는 수동 생산, X는 베이 초기화입니다.";
-    this.startButton.textContent = "시점 다시 연결 →";
+    this.startButton.innerHTML =
+      '<span>시점 다시 연결</span>' + uiIcon("enter");
     this.startOverlay.classList.remove("is-hidden");
   }
 
@@ -851,18 +1014,30 @@ export class GameUI {
     removalLabel?: string,
     missionDetails?: MissionOwnerCardDetails,
   ): void {
+    // 상세 화면은 명시적으로 닫을 때까지 열 당시의 제작자 정보를 유지한다.
+    // 조준 손실이나 청크 재동기화가 dialog 내용을 바꾸지 않게 한다.
+    if (this.isOwnerCardExpanded) {
+      return;
+    }
     if (!block) {
-      this.ownerCard.hidden = true;
+      this.ownerTargetPresent = false;
       this.ownerPublicId = null;
       this.ownerActions.hidden = true;
       this.ownerMissionMeta.hidden = true;
       this.actionHint.textContent = "블록을 조준해 보세요";
+      this.syncHighlightSurfaces();
       return;
     }
 
     this.ownerPublicId = block.owner.publicId;
-    this.ownerCard.hidden = false;
-    this.ownerEmblem.textContent = block.owner.emblem;
+    this.ownerTargetPresent = true;
+    this.ownerTooltipName.textContent = block.owner.nickname;
+    setCreatorCrest(this.ownerTooltipCrest, block.owner);
+    this.ownerTooltipDate.textContent = formatOwnerTooltipDate(block.createdAt);
+    this.ownerTooltipDate.dateTime = Number.isFinite(block.createdAt)
+      ? new Date(block.createdAt).toISOString()
+      : "";
+    setCreatorCrest(this.ownerEmblem, block.owner);
     this.ownerName.textContent = block.owner.nickname;
     this.ownerId.textContent = block.owner.publicId;
     this.ownerMeta.textContent =
@@ -892,14 +1067,23 @@ export class GameUI {
         ? "이 블록은 제거할 수 있어요"
         : "이 블록은 보호돼요");
     this.actionHint.textContent = placementLabel + " · " + resolvedRemovalLabel;
+    this.syncHighlightSurfaces();
   }
 
   bindOwnerHighlight(handler: (publicId: string) => void): void {
     this.ownerHighlightButton.addEventListener("click", () => {
       if (this.ownerPublicId) {
+        if (this.highlightedOwner?.publicId === this.ownerPublicId) {
+          this.highlightClearButton.click();
+          return;
+        }
         handler(this.ownerPublicId);
       }
     });
+  }
+
+  bindOwnerDetailsOpen(handler: () => void): void {
+    this.ownerDetailsOpenHandler = handler;
   }
 
   bindOwnerFind(
@@ -1005,7 +1189,7 @@ export class GameUI {
     this.missionTitle.textContent = state.missionName;
     this.missionFloor.textContent =
       state.missionName + " · " + String(state.layer) + "층";
-    this.missionStage.textContent = "✦ " + String(glow) + "%";
+    this.missionStageValue.textContent = String(glow) + "%";
     this.missionStage.title = missionStageLabel(state.stage);
     this.missionStage.dataset["stage"] = String(state.stage);
     this.missionStage.dataset["glow"] = String(glow);
@@ -1054,7 +1238,8 @@ export class GameUI {
     for (const contributor of contributors) {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "contributor-light";
+      button.className =
+        "contributor-light ui-button ui-button--secondary ui-button--toggle";
       button.dataset["contributorId"] = contributor.publicId;
       button.title =
         contributor.nickname +
@@ -1065,16 +1250,14 @@ export class GameUI {
         "칸 기여";
       button.setAttribute(
         "aria-label",
-        contributor.nickname +
-          " " +
-          contributor.publicId +
+        creatorCrestLabel(contributor) +
           ", " +
           String(contributor.contributionCount) +
           "칸 기여",
       );
 
       const emblem = document.createElement("span");
-      emblem.textContent = contributor.emblem;
+      setCreatorCrest(emblem, contributor);
       const identity = document.createElement("span");
       identity.className = "contributor-light-identity";
       const nickname = document.createElement("strong");
@@ -1099,6 +1282,11 @@ export class GameUI {
   }
 
   openMissionArchive(): void {
+    // 기록관은 펼친 미션 패널에서 진입한다. 닫은 뒤 같은 버튼으로 다시
+    // 열 수 있도록 미션 패널 상태는 보존하고, 충돌 가능한 표면만 정리한다.
+    this.setWorldPanelExpanded(false);
+    this.closePalette();
+    this.closeOwnerDetails();
     if (document.pointerLockElement) {
       document.exitPointerLock();
     }
@@ -1130,20 +1318,14 @@ export class GameUI {
   setHighlightState(
     highlighted: { publicId: string; nickname: string } | null,
   ): void {
-    this.highlightBanner.hidden = highlighted === null;
-    this.highlightFindButton.hidden = highlighted === null || !isTouchLayout();
+    this.highlightedOwner = highlighted;
     this.highlightLabel.textContent = highlighted
       ? highlighted.nickname + " " + highlighted.publicId + "의 별빛을 강조 중"
       : "제작자 블록 강조 해제";
-    this.ownerHighlightButton.setAttribute(
-      "aria-pressed",
-      String(
-        highlighted !== null && highlighted.publicId === this.ownerPublicId,
-      ),
-    );
     this.missionHighlightMineButton.textContent = highlighted
       ? "다른 내 블록 찾기"
       : "내 블록 강조";
+    this.syncHighlightSurfaces();
   }
 
   setCompletionCinematicActive(active: boolean): void {
@@ -1157,6 +1339,12 @@ export class GameUI {
 
   setPlayerState(label: string): void {
     this.playerState.textContent = label;
+  }
+
+  setPlayerProfile(owner: Pick<BlockOwner, "publicId" | "nickname" | "emblem">): void {
+    this.playerProfileNickname.textContent = owner.nickname;
+    this.playerProfilePublicId.textContent = owner.publicId;
+    setCreatorCrest(this.playerProfileCrest, owner);
   }
 
   setRepositoryMode(mode: "local" | "online", publicId?: string): void {
@@ -1178,6 +1366,26 @@ export class GameUI {
     this.manualRemaining.textContent =
       "수동 " + String(state.manualRemaining) + "회 남음";
     this.resetBayButton.hidden = !state.resetAvailable;
+    this.inventoryCount.parentElement?.setAttribute(
+      "aria-label",
+      `보유 블록 ${state.inventory}개`,
+    );
+    this.buildInventoryCount.parentElement?.setAttribute(
+      "aria-label",
+      `보유 블록 ${state.inventory}개`,
+    );
+    this.baseProgress.parentElement?.setAttribute(
+      "aria-label",
+      `개인 거점 ${state.baseBuilt}/16`,
+    );
+    this.producerProgress.parentElement?.setAttribute(
+      "aria-label",
+      `생산시설 ${state.producerBuilt}/8`,
+    );
+    this.producerLevel.parentElement?.setAttribute(
+      "aria-label",
+      `생산시설 레벨 ${state.producerLevel}`,
+    );
   }
 
   setManualProductionState(label: string | null, enabled: boolean): void {
@@ -1284,7 +1492,7 @@ export class GameUI {
       const item = document.createElement("span");
       item.className = "mission-recent-item";
       const emblem = document.createElement("i");
-      emblem.textContent = contribution.emblem;
+      setCreatorCrest(emblem, contribution);
       const copy = document.createElement("span");
       const name = document.createElement("strong");
       name.textContent = contribution.nickname;
@@ -1312,6 +1520,8 @@ export class GameUI {
     for (const slot of slots) {
       const button = document.createElement("button");
       button.type = "button";
+      button.className =
+        "ui-button ui-button--secondary ui-button--toggle ui-button--compact";
       button.dataset["missionSlot"] = String(slot.slotIndex);
       button.textContent = slot.label;
       const selected = slot.slotIndex === this.selectedMissionSlot;
@@ -1338,6 +1548,8 @@ export class GameUI {
     for (const color of palette) {
       const button = document.createElement("button");
       button.type = "button";
+      button.className =
+        "ui-button ui-button--secondary ui-button--toggle ui-button--icon ui-button--compact";
       button.dataset["missionPalette"] = String(color.paletteIndex);
       button.dataset["missionColor"] = String(color.colorIndex);
       button.title = color.name;
@@ -1393,7 +1605,8 @@ export class GameUI {
       const empty = document.createElement("div");
       empty.className = "mission-archive-empty";
       const emblem = document.createElement("span");
-      emblem.textContent = "✦";
+      emblem.setAttribute("aria-hidden", "true");
+      emblem.innerHTML = uiIcon("mission");
       const title = document.createElement("strong");
       title.textContent = "아직 완성된 관문이 없어요";
       const copy = document.createElement("p");
@@ -1428,7 +1641,7 @@ export class GameUI {
         person.className = "archive-contributor";
         person.title = String(contributor.contributionCount) + "칸 기여";
         const emblem = document.createElement("span");
-        emblem.textContent = contributor.emblem;
+        setCreatorCrest(emblem, contributor);
         const identity = document.createElement("span");
         const nickname = document.createElement("strong");
         nickname.textContent = contributor.nickname;
@@ -1445,7 +1658,7 @@ export class GameUI {
 
       const visit = document.createElement("button");
       visit.type = "button";
-      visit.className = "archive-visit";
+      visit.className = "archive-visit ui-button ui-button--primary";
       visit.dataset["archiveVisit"] = entry.instanceId;
       visit.textContent = "기념물 보러 가기";
       article.append(header, participantLabel, people, visit);
@@ -1457,7 +1670,8 @@ export class GameUI {
     PALETTE.forEach((color, index) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "color-button";
+      button.className =
+        "color-button ui-button ui-button--secondary ui-button--toggle ui-button--icon ui-button--compact";
       button.dataset["color"] = String(index);
       button.setAttribute("aria-label", color.name);
       button.title = color.name;
@@ -1465,7 +1679,9 @@ export class GameUI {
         "--swatch",
         "#" + color.value.toString(16).padStart(6, "0"),
       );
-      button.classList.toggle("is-selected", index === this.selection.colorIndex);
+      const selected = index === this.selection.colorIndex;
+      button.classList.toggle("is-selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
       container.append(button);
     });
   }
@@ -1484,30 +1700,151 @@ export class GameUI {
       "--selected-swatch",
       "#" + color.value.toString(16).padStart(6, "0"),
     );
-    this.paletteToggle.title = color.name + " · 색상 선택 · Q/E";
+    this.paletteToggle.title =
+      "블록 색상: " + color.name + " · 눌러서 변경 · Q/E";
   }
 
   private selectColor(colorIndex: number): Readonly<BuildSelection> {
     this.selection = { ...this.selection, colorIndex };
     document.querySelectorAll<HTMLElement>("[data-color]").forEach((item) => {
-      item.classList.toggle(
-        "is-selected",
-        Number(item.dataset["color"]) === colorIndex,
-      );
+      const selected = Number(item.dataset["color"]) === colorIndex;
+      item.classList.toggle("is-selected", selected);
+      item.setAttribute("aria-pressed", String(selected));
     });
     this.updateSelectedLabel();
     this.closePalette();
     return this.selection;
   }
 
+  private syncHighlightSurfaces(): void {
+    const highlighted = this.highlightedOwner;
+    const ownerDetailsExpanded = this.ownerCard.classList.contains("is-expanded");
+    this.ownerTooltip.hidden =
+      !this.ownerTargetPresent || ownerDetailsExpanded;
+    this.ownerCard.hidden = !ownerDetailsExpanded;
+    const ownerCardCarriesControls =
+      highlighted !== null &&
+      !this.ownerCard.hidden &&
+      highlighted.publicId === this.ownerPublicId;
+    this.highlightBanner.hidden = highlighted === null || ownerCardCarriesControls;
+    this.highlightFindButton.hidden = highlighted === null || !isTouchLayout();
+    this.ownerHighlightButton.setAttribute(
+      "aria-pressed",
+      String(ownerCardCarriesControls),
+    );
+    this.ownerHighlightButton.textContent = ownerCardCarriesControls
+      ? "강조 해제"
+      : "이 제작자의 블록 강조";
+  }
+
   private toggleWorldPanel(): void {
     const expanded = !this.worldPanel.classList.contains("is-expanded");
+    if (expanded && isTouchLayout()) {
+      this.setMissionPanelExpanded(false);
+      this.closePalette();
+    }
+    this.setWorldPanelExpanded(expanded);
+  }
+
+  private setWorldPanelExpanded(expanded: boolean): void {
     this.worldPanel.classList.toggle("is-expanded", expanded);
     this.worldPanelToggle.setAttribute("aria-expanded", String(expanded));
     this.worldPanelToggle.setAttribute(
       "aria-label",
-      expanded ? "인벤토리와 단축키 닫기" : "인벤토리와 단축키 열기",
+      expanded
+        ? "내 프로필과 건축 상태 닫기"
+        : "내 프로필과 건축 상태 열기",
     );
+  }
+
+  private setOwnerCardExpanded(expanded: boolean): void {
+    this.ownerCard.classList.toggle("is-expanded", expanded);
+    this.ownerCardToggle.setAttribute("aria-expanded", String(expanded));
+    this.ownerTooltipMore.setAttribute("aria-expanded", String(expanded));
+    this.ownerCardToggle.setAttribute("aria-label", "제작자 상세 닫기");
+    this.syncHighlightSurfaces();
+    if (
+      !expanded &&
+      this.hasEnteredWorld &&
+      !isTouchLayout() &&
+      document.pointerLockElement === null
+    ) {
+      this.showPointerLockPrompt();
+    }
+  }
+
+  private openOwnerDetails(): void {
+    if (!this.ownerTargetPresent || this.isOwnerCardExpanded) {
+      return;
+    }
+    this.ownerDetailsReturnFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : this.ownerTooltipMore;
+    this.setWorldPanelExpanded(false);
+    this.setMissionPanelExpanded(false);
+    this.closePalette();
+    this.setOwnerModalIsolation(true);
+    this.setOwnerCardExpanded(true);
+    releasePointerLockForDialog();
+    this.ownerDetailsOpenHandler();
+    window.requestAnimationFrame(() => this.ownerCardToggle.focus());
+  }
+
+  private closeOwnerDetails(): void {
+    if (!this.isOwnerCardExpanded) {
+      return;
+    }
+    this.setOwnerCardExpanded(false);
+    this.setOwnerModalIsolation(false);
+    const returnFocus = this.ownerDetailsReturnFocus;
+    this.ownerDetailsReturnFocus = null;
+    if (returnFocus?.isConnected) {
+      returnFocus.focus();
+    }
+  }
+
+  private setOwnerModalIsolation(active: boolean): void {
+    if (active) {
+      const parent = this.ownerCard.parentElement;
+      if (!parent) {
+        return;
+      }
+      this.ownerModalInertElements = [...parent.children].flatMap((element) =>
+        element instanceof HTMLElement &&
+        element !== this.ownerCard &&
+        !element.inert
+          ? [element]
+          : [],
+      );
+      for (const element of this.ownerModalInertElements) {
+        element.inert = true;
+      }
+      return;
+    }
+    for (const element of this.ownerModalInertElements) {
+      element.inert = false;
+    }
+    this.ownerModalInertElements = [];
+  }
+
+  private cycleOwnerDetailsFocus(backward: boolean): void {
+    const focusable = [
+      ...this.ownerCard.querySelectorAll<HTMLButtonElement>("button:not([hidden])"),
+    ].filter((button) => !button.disabled && isVisibleElement(button));
+    if (focusable.length === 0) {
+      this.ownerCard.focus();
+      return;
+    }
+    const current = focusable.indexOf(
+      document.activeElement instanceof HTMLButtonElement
+        ? document.activeElement
+        : focusable[0]!,
+    );
+    const next = backward
+      ? (current - 1 + focusable.length) % focusable.length
+      : (current + 1) % focusable.length;
+    focusable[next]!.focus();
   }
 
   private toggleMissionPanel(): void {
@@ -1516,6 +1853,10 @@ export class GameUI {
   }
 
   private setMissionPanelExpanded(expanded: boolean): void {
+    if (expanded && isTouchLayout()) {
+      this.setWorldPanelExpanded(false);
+      this.closePalette();
+    }
     this.missionPanel.classList.toggle("is-collapsed", !expanded);
     this.missionPanelToggle.setAttribute("aria-expanded", String(expanded));
     this.missionPanelToggle.setAttribute(
@@ -1526,15 +1867,42 @@ export class GameUI {
 
   private togglePalette(): void {
     const expanded = this.paletteRow.hidden === true;
+    if (expanded && isTouchLayout()) {
+      this.setWorldPanelExpanded(false);
+      this.setMissionPanelExpanded(false);
+      this.closeOwnerDetails();
+    }
     this.paletteRow.hidden = !expanded;
     this.buildTray.classList.toggle("is-palette-open", expanded);
     this.paletteToggle.setAttribute("aria-expanded", String(expanded));
+    this.paletteToggle.setAttribute(
+      "aria-label",
+      expanded ? "블록 색상 선택 닫기" : "블록 색상 선택 열기",
+    );
   }
 
   private closePalette(): void {
     this.paletteRow.hidden = true;
     this.buildTray.classList.remove("is-palette-open");
     this.paletteToggle.setAttribute("aria-expanded", "false");
+    this.paletteToggle.setAttribute("aria-label", "블록 색상 선택 열기");
+  }
+
+  private closeTransientHudPanels(): void {
+    this.setWorldPanelExpanded(false);
+    this.setMissionPanelExpanded(false);
+    this.closePalette();
+    this.closeOwnerDetails();
+  }
+
+  private handleViewportChange(): void {
+    this.updateTouchCopy();
+    const nextOrientation = currentLayoutOrientation();
+    if (nextOrientation === this.layoutOrientation) {
+      return;
+    }
+    this.layoutOrientation = nextOrientation;
+    this.closeTransientHudPanels();
   }
 
   private updateTouchCopy(): void {
@@ -1542,7 +1910,7 @@ export class GameUI {
       return;
     }
     this.startDescription.textContent =
-      "왼쪽 스틱으로 이동하고 오른쪽 화면을 밀어 둘러보세요. 큰 ＋ 버튼으로 블록을 놓습니다.";
+      "왼쪽 스틱으로 이동하고 오른쪽 화면을 밀어 둘러보세요. 설치 버튼으로 블록을 놓습니다.";
   }
 }
 
@@ -1553,11 +1921,27 @@ export function isTouchLayout(): boolean {
   );
 }
 
+function currentLayoutOrientation(): "portrait" | "landscape" {
+  return window.innerHeight >= window.innerWidth ? "portrait" : "landscape";
+}
+
 function isEditableTarget(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && target.isContentEditable)
+  );
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  const style = window.getComputedStyle(element);
+  const rect = element.getBoundingClientRect();
+  return (
+    !element.hidden &&
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    rect.width > 0 &&
+    rect.height > 0
   );
 }
 
@@ -1608,6 +1992,17 @@ function formatMissionTimestamp(timestamp: number): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+  }).format(new Date(timestamp));
+}
+
+function formatOwnerTooltipDate(timestamp: number): string {
+  if (!Number.isFinite(timestamp)) {
+    return "설치일 미상";
+  }
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
   }).format(new Date(timestamp));
 }
 

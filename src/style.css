@@ -9,6 +9,25 @@
   --line: rgba(219, 237, 255, 0.15);
   --mint: #78f0c6;
   --coral: #ff7c78;
+  --control-height: 36px;
+  --control-height-compact: 32px;
+  --control-hit-mobile: 44px;
+  --control-radius: 11px;
+  --control-padding-x: 12px;
+  --control-gap: 6px;
+  --button-primary-ink: #102d30;
+  --button-primary-bg: linear-gradient(135deg, #83f2cc, #d7e7a1);
+  --button-primary-shadow: 0 8px 22px rgba(120, 240, 198, 0.18);
+  --button-secondary-ink: #f7fbff;
+  --button-secondary-bg: rgba(14, 31, 52, 0.82);
+  --button-secondary-border: rgba(176, 211, 227, 0.38);
+  --button-danger-ink: #ffe8e6;
+  --button-danger-bg: rgba(113, 33, 48, 0.88);
+  --button-danger-border: rgba(255, 143, 139, 0.58);
+  --button-quiet-ink: rgba(231, 242, 255, 0.78);
+  --button-selected-ink: #eafff8;
+  --button-selected-bg: rgba(120, 240, 198, 0.16);
+  --button-selected-border: rgba(120, 240, 198, 0.68);
   background: #101a2c;
 }
 
@@ -81,7 +100,7 @@ button:focus-visible {
 #game-canvas {
   display: block;
   touch-action: none;
-  background: #7ba6c8;
+  background: #0a1025;
 }
 
 .glass {
@@ -255,13 +274,6 @@ button:focus-visible {
   cursor: pointer;
 }
 
-.hud-actions button:first-child {
-  color: #13332e;
-  border-color: transparent;
-  background: var(--mint);
-  font-weight: 750;
-}
-
 .hud-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -385,13 +397,6 @@ button:focus-visible {
   font-size: 9px;
 }
 
-.owner-actions button:first-child {
-  color: #122d2a;
-  border-color: transparent;
-  background: var(--mint);
-  font-weight: 750;
-}
-
 .mission-panel {
   position: absolute;
   z-index: 13;
@@ -419,7 +424,7 @@ button:focus-visible {
   gap: 8px;
 }
 
-.mission-heading > div {
+.mission-heading-copy {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -1924,18 +1929,6 @@ button:focus-visible {
     touch-action: none;
   }
 
-  .mobile-actions .primary {
-    border: 0;
-    color: #10272e;
-    background: var(--mint);
-    font-size: 28px;
-  }
-
-  .mobile-actions .danger {
-    color: #ffc8c5;
-    background: rgba(107, 35, 46, 0.72);
-  }
-
   .build-tray {
     top: calc(max(10px, env(safe-area-inset-top)) + 62px);
     bottom: auto;
@@ -2518,6 +2511,10 @@ button:focus-visible {
     touch-action: pan-y;
   }
 
+  .world-panel.is-expanded .shortcut-guide {
+    display: none;
+  }
+
   .mission-panel.is-collapsed {
     max-height: 92px;
   }
@@ -2690,6 +2687,142 @@ button:focus-visible {
   }
 }
 
+/* Aimed block creator: one contextual line first, explicit details second. */
+.owner-tooltip {
+  position: absolute;
+  z-index: 18;
+  top: calc(50% + 28px);
+  left: 50%;
+  display: grid;
+  width: min(350px, calc(100vw - 24px));
+  min-height: 44px;
+  grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 14px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.owner-tooltip-crest {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  line-height: 0;
+}
+
+.owner-tooltip-crest .creator-crest {
+  width: 28px;
+  height: 28px;
+}
+
+.owner-tooltip[hidden] {
+  display: none;
+}
+
+.owner-tooltip strong,
+.owner-tooltip time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-tooltip strong {
+  min-width: 0;
+  font-size: 11px;
+}
+
+.owner-tooltip time {
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.owner-tooltip button {
+  display: inline-flex;
+  min-width: 64px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 750;
+  pointer-events: auto;
+}
+
+.owner-tooltip kbd {
+  color: var(--mint);
+  font: 700 8px/1 ui-monospace, monospace;
+}
+
+.game-shell:has(.owner-tooltip:not([hidden])) .action-hint {
+  display: none;
+}
+
+.owner-card:not(.is-expanded) {
+  display: none !important;
+}
+
+.owner-card.is-expanded {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 44px;
+  align-items: start;
+}
+
+.owner-card.is-expanded .owner-card-toggle {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+}
+
+.owner-card.is-expanded .owner-card-toggle .ui-icon {
+  transform: none;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .owner-tooltip {
+    width: min(328px, calc(100vw - 24px));
+    min-height: 48px;
+    gap: 6px;
+    padding: 2px 2px 2px 10px;
+  }
+
+  .owner-tooltip strong {
+    font-size: 10px;
+  }
+
+  .owner-tooltip time {
+    font-size: 8px;
+  }
+
+  .owner-tooltip button {
+    min-width: 68px;
+    min-height: 44px;
+    padding-inline: 8px;
+  }
+
+  .owner-tooltip kbd {
+    display: none;
+  }
+
+  .game-shell:has(.owner-card.is-expanded) .world-panel,
+  .game-shell:has(.owner-card.is-expanded) .owner-tooltip {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
 @media (max-width: 400px) and (max-height: 700px) and (orientation: portrait) {
   .brand-panel {
     padding: 5px 7px 5px 5px;
@@ -2760,5 +2893,1450 @@ button:focus-visible {
   .mobile-actions button {
     width: 48px;
     height: 48px;
+  }
+}
+
+/* Final mobile HUD overrides: keep later component rules from expanding the
+   compact play surface again. */
+.owner-card-toggle {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .brand-panel {
+    min-width: 0;
+    gap: 5px;
+    padding: 4px;
+    border-radius: 15px;
+  }
+
+  .brand-panel > div {
+    display: none;
+  }
+
+  .brand-mark,
+  .analytics-settings-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    margin: 0;
+    border-radius: 12px;
+  }
+
+  .world-panel:not(.is-expanded) {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 13px;
+    transform: none;
+  }
+
+  .world-panel:not(.is-expanded) .world-panel-toggle {
+    order: 0;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border: 0;
+    background: transparent;
+  }
+
+  .world-panel:not(.is-expanded) .world-status-row,
+  .world-panel:not(.is-expanded) .progress-grid,
+  .world-panel:not(.is-expanded) .production-status,
+  .world-panel:not(.is-expanded) .hud-actions,
+  .world-panel:not(.is-expanded) .manual-stage,
+  .world-panel:not(.is-expanded) .shortcut-guide {
+    display: none;
+  }
+
+  .world-panel.is-expanded {
+    z-index: 32;
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 10px;
+    overflow: hidden auto;
+    transform: none;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .world-panel.is-expanded .shortcut-guide {
+    display: none;
+  }
+
+  .mission-panel.is-collapsed {
+    width: auto;
+    min-width: 104px;
+    max-width: 116px;
+    height: 50px;
+    min-height: 50px;
+    max-height: 50px;
+    padding: 3px;
+    overflow: hidden;
+    border-radius: 14px;
+  }
+
+  .mission-panel.is-collapsed .mission-heading-copy,
+  .mission-panel.is-collapsed .mission-progress,
+  .mission-panel.is-collapsed .mission-progress-copy,
+  .mission-panel.is-collapsed .mission-details {
+    display: none;
+  }
+
+  .mission-panel.is-collapsed .mission-heading,
+  .mission-panel.is-collapsed .mission-heading-actions {
+    width: 100%;
+    height: 44px;
+    gap: 3px;
+  }
+
+  .mission-panel.is-collapsed .mission-stage {
+    height: 42px;
+    flex: 1 1 auto;
+    justify-content: center;
+    padding: 0 7px;
+  }
+
+  .mission-panel.is-collapsed .mission-panel-toggle {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .mobile-actions button > small,
+  .action-hint {
+    display: none;
+  }
+
+  .owner-card {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    display: grid;
+    width: min(240px, calc(100vw - 126px));
+    min-width: 0;
+    max-width: 240px;
+    min-height: 52px;
+    max-height: 52px;
+    grid-template-columns: 40px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 6px;
+    padding: 4px;
+    overflow: hidden;
+    border-radius: 15px;
+  }
+
+  .owner-card .owner-emblem {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 11px;
+  }
+
+  .owner-card .owner-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 3px 6px;
+  }
+
+  .owner-card .owner-copy > small:first-child,
+  .owner-card #owner-meta,
+  .owner-card .owner-installed-at,
+  .owner-card .owner-mission-meta,
+  .owner-card .owner-actions {
+    display: none;
+  }
+
+  .owner-card .owner-copy strong,
+  .owner-card #owner-id {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .owner-card-toggle {
+    display: grid;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, 0.13);
+    border-radius: 11px;
+    color: var(--muted);
+    background: rgba(255, 255, 255, 0.07);
+  }
+
+  .owner-card-toggle .ui-icon {
+    width: 17px;
+    height: 17px;
+    transition: transform 140ms ease;
+  }
+
+  .owner-card.is-expanded {
+    z-index: 33;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: min(280px, calc(100dvh - 16px));
+    align-items: start;
+    padding: 8px;
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+  }
+
+  .owner-card.is-expanded .owner-card-toggle .ui-icon {
+    transform: rotate(180deg);
+  }
+
+  .owner-card.is-expanded #owner-meta,
+  .owner-card.is-expanded .owner-installed-at,
+  .owner-card.is-expanded .owner-mission-meta {
+    display: block;
+    grid-column: 1 / -1;
+  }
+
+  .owner-card.is-expanded .owner-actions:not([hidden]) {
+    display: grid;
+    grid-column: 1 / -1;
+  }
+
+  .game-shell:has(.owner-card:not([hidden]))
+    .world-panel:not(.is-expanded) {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .game-shell:has(.world-panel.is-expanded) .brand-panel,
+  .game-shell:has(.world-panel.is-expanded) .mission-panel,
+  .game-shell:has(.world-panel.is-expanded) .owner-tooltip,
+  .game-shell:has(.world-panel.is-expanded) .owner-card,
+  .game-shell:has(.world-panel.is-expanded) .highlight-banner,
+  .game-shell:has(.world-panel.is-expanded) .build-tray,
+  .game-shell:has(.world-panel.is-expanded) .mobile-controls,
+  .game-shell:has(.world-panel.is-expanded) .look-zone,
+  .game-shell:has(.world-panel.is-expanded) .crosshair,
+  .game-shell:has(.world-panel.is-expanded) .brand-panel,
+  .game-shell:has(.world-panel.is-expanded) .mission-panel,
+  .game-shell:has(.world-panel.is-expanded) .owner-card,
+  .game-shell:has(.world-panel.is-expanded) .highlight-banner,
+  .game-shell:has(.world-panel.is-expanded) .build-tray,
+  .game-shell:has(.world-panel.is-expanded) .mobile-controls,
+  .game-shell:has(.world-panel.is-expanded) .crosshair,
+  .game-shell:has(.owner-card.is-expanded) .brand-panel,
+  .game-shell:has(.owner-card.is-expanded) .mission-panel,
+  .game-shell:has(.owner-card.is-expanded) .highlight-banner,
+  .game-shell:has(.owner-card.is-expanded) .build-tray,
+  .game-shell:has(.owner-card.is-expanded) .mobile-controls,
+  .game-shell:has(.owner-card.is-expanded) .crosshair {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  .mission-panel.is-collapsed {
+    top: calc(max(8px, env(safe-area-inset-top)) + 58px);
+    right: auto;
+    bottom: auto;
+    left: max(8px, env(safe-area-inset-left));
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .mission-panel.is-collapsed {
+    top: auto;
+    right: auto;
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 128px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Lumenmoon icon system and containment ---------------------------------- */
+
+.ui-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.ui-icon .icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.ui-icon .icon-accent {
+  color: #f7d889;
+}
+
+.creator-crest {
+  display: block;
+  width: 1em;
+  height: 1em;
+  flex: 0 0 auto;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.creator-crest-glyph {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.creator-crest-glyph .icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
+.brand-mark .ui-icon {
+  width: 25px;
+  height: 25px;
+}
+
+.analytics-settings-button > span,
+.status-icon,
+.block-stack > i,
+.mission-stage > i {
+  display: grid;
+  place-items: center;
+}
+
+.analytics-settings-button .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.brand-panel > div,
+.owner-copy,
+.mission-heading-copy,
+.mission-heading-actions,
+.mission-progress-copy,
+.production-status,
+.hud-actions,
+.shortcut-guide dd {
+  min-width: 0;
+}
+
+.block-stack {
+  min-width: 46px;
+  flex-shrink: 0;
+}
+
+.brand-panel strong,
+.brand-panel small,
+.owner-copy strong,
+.owner-copy span,
+.mission-heading strong,
+.mission-heading small,
+.mission-progress-copy strong,
+.mission-progress-copy span,
+.production-status span,
+.hud-actions button,
+.highlight-banner span,
+.highlight-banner button {
+  max-width: 100%;
+}
+
+.world-panel-toggle,
+.tool-button {
+  position: relative;
+}
+
+.world-panel-toggle .ui-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.world-panel-toggle kbd,
+.tool-button kbd {
+  position: absolute;
+  top: 2px;
+  right: 3px;
+  min-width: 11px;
+  padding: 1px 2px;
+  border: 0;
+  border-radius: 4px;
+  color: rgba(231, 242, 255, 0.6);
+  background: rgba(4, 10, 20, 0.48);
+  font: 700 7px/1.2 ui-monospace, monospace;
+  text-align: center;
+}
+
+.world-panel.is-expanded .world-panel-toggle,
+.mission-panel:not(.is-collapsed) .mission-panel-toggle {
+  transform: none;
+}
+
+.world-panel:not(.is-expanded) .status-inventory {
+  display: none;
+}
+
+.world-panel:not(.is-expanded) .progress-grid {
+  grid-template-columns: repeat(3, auto);
+}
+
+.status-icon {
+  font-size: 16px;
+}
+
+.status-icon .ui-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.mission-heading {
+  min-width: 0;
+}
+
+.mission-heading-copy {
+  flex: 1 1 auto;
+}
+
+.mission-heading > .mission-heading-actions {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.mission-stage {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.mission-stage > i {
+  font-style: normal;
+}
+
+.mission-stage .ui-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.mission-stage strong {
+  font-size: inherit;
+}
+
+.mission-panel-toggle .ui-icon {
+  width: 17px;
+  height: 17px;
+  transition: transform 140ms ease;
+}
+
+.mission-panel:not(.is-collapsed) .mission-panel-toggle .ui-icon {
+  transform: rotate(180deg);
+}
+
+.tool-button .ui-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.block-stack > i {
+  font-size: 17px;
+}
+
+.block-stack .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.owner-emblem,
+.contributor-light > span:first-child,
+.mission-recent-item > i,
+.archive-contributor > span:first-child,
+.mission-archive-empty > span:first-child {
+  line-height: 0;
+}
+
+.owner-emblem .ui-icon {
+  width: 23px;
+  height: 23px;
+}
+
+.owner-emblem .creator-crest {
+  width: 32px;
+  height: 32px;
+}
+
+.contributor-light > span:first-child .ui-icon,
+.mission-recent-item > i .ui-icon,
+.archive-contributor > span:first-child .ui-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.contributor-light > span:first-child .creator-crest,
+.mission-recent-item > i .creator-crest,
+.archive-contributor > span:first-child .creator-crest {
+  width: 24px;
+  height: 24px;
+}
+
+.mission-archive-empty > span:first-child .ui-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.fatal-card > span .ui-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.start-card #start-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.start-card #start-button .ui-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.analytics-consent-choice > span:first-child .ui-icon {
+  width: 21px;
+  height: 21px;
+}
+
+.mobile-actions button {
+  align-content: center;
+  justify-items: center;
+  gap: 2px;
+  padding: 5px 3px;
+  line-height: 1;
+}
+
+.mobile-actions button .ui-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.mobile-actions button small {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: rgba(241, 247, 255, 0.76);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-actions .ui-button--primary small {
+  color: rgba(12, 38, 42, 0.78);
+}
+
+.build-tray {
+  contain: layout;
+}
+
+.world-panel,
+.mission-panel,
+.owner-card,
+.highlight-banner {
+  contain: layout paint;
+}
+
+/* 제작자 확인 중에도 건축 종류·색상·재고 퀵바를 유지한다. */
+.game-shell:has(.owner-card:not([hidden])) .build-tray,
+.game-shell:has(.highlight-banner:not([hidden])) .build-tray {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .world-panel-toggle kbd,
+  .tool-button kbd {
+    display: none;
+  }
+
+  .tool-button .ui-icon {
+    width: 24px;
+    height: 24px;
+  }
+
+  .world-panel .progress-grid > span,
+  .block-stack,
+  .tool-button,
+  .palette-toggle,
+  .mobile-actions button {
+    overflow: hidden;
+  }
+
+  .block-stack {
+    min-width: 52px;
+  }
+
+  .block-stack strong {
+    display: inline-block;
+    min-width: 1ch;
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .world-panel:not(.is-expanded) .progress-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .world-panel:not(.is-expanded) .progress-grid > span {
+    min-width: 0;
+  }
+
+  .build-tray {
+    top: calc(max(8px, env(safe-area-inset-top)) + 126px);
+    padding: 4px 6px;
+  }
+
+  .owner-card {
+    top: calc(max(8px, env(safe-area-inset-top)) + 202px);
+    display: grid;
+    width: auto;
+    max-height: none;
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 8px;
+    padding: 6px;
+    overflow: visible;
+  }
+
+  .owner-copy {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 6px;
+  }
+
+  .owner-copy > small:first-child {
+    display: none;
+  }
+
+  .owner-copy strong {
+    margin-top: 0;
+  }
+
+  .owner-mission-meta {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    margin-top: 2px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .owner-actions {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) minmax(76px, 0.55fr);
+    margin-top: 4px;
+  }
+
+  .owner-actions button {
+    min-height: 44px;
+  }
+
+  .highlight-banner {
+    top: calc(max(8px, env(safe-area-inset-top)) + 202px);
+  }
+
+  .mission-panel.is-collapsed {
+    height: 98px;
+    min-height: 98px;
+    max-height: 98px;
+  }
+
+  .mission-panel.is-collapsed .mission-heading,
+  .mission-panel.is-collapsed .mission-progress,
+  .mission-panel.is-collapsed .mission-progress-copy {
+    flex: 0 0 auto;
+  }
+}
+
+@media (max-width: 400px) and (max-height: 700px) and (orientation: portrait) {
+  .build-tray {
+    top: calc(max(6px, env(safe-area-inset-top)) + 122px);
+  }
+
+  .owner-card,
+  .highlight-banner {
+    top: calc(max(6px, env(safe-area-inset-top)) + 200px);
+  }
+
+  .owner-card {
+    padding: 6px;
+  }
+
+  .owner-actions {
+    gap: 4px;
+    margin-top: 4px;
+  }
+
+  .mission-panel.is-collapsed {
+    height: 98px;
+    min-height: 98px;
+    max-height: 98px;
+  }
+}
+
+/* Mobile HUD final cascade guard ---------------------------------------- */
+@media (pointer: coarse), (max-width: 760px) {
+  .world-panel:not(.is-expanded) {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    transform: none;
+  }
+
+  .world-panel:not(.is-expanded) .world-status-row,
+  .world-panel:not(.is-expanded) .progress-grid,
+  .world-panel:not(.is-expanded) .production-status,
+  .world-panel:not(.is-expanded) .hud-actions,
+  .world-panel:not(.is-expanded) .manual-stage,
+  .world-panel:not(.is-expanded) .shortcut-guide {
+    display: none;
+  }
+
+  .world-panel.is-expanded {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 10px;
+    transform: none;
+  }
+
+  .build-tray.is-palette-open {
+    z-index: 35;
+    overflow: visible;
+  }
+
+  .build-tray .palette-row {
+    top: calc(100% + 7px);
+    bottom: auto;
+    max-height: calc(100dvh - 84px);
+    overflow: hidden auto;
+  }
+
+  .mission-panel.is-collapsed {
+    width: auto;
+    min-width: 104px;
+    max-width: 116px;
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    padding: 3px;
+  }
+
+  .mission-panel.is-collapsed .mission-heading-copy,
+  .mission-panel.is-collapsed .mission-progress,
+  .mission-panel.is-collapsed .mission-progress-copy,
+  .mission-panel.is-collapsed .mission-details {
+    display: none;
+  }
+
+  .mission-panel.is-collapsed .mission-heading,
+  .mission-panel.is-collapsed .mission-heading-actions {
+    width: 100%;
+    height: 44px;
+  }
+
+  .mission-panel.is-collapsed .mission-panel-toggle {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .mission-panel:not(.is-collapsed) {
+    z-index: 34;
+    top: max(8px, env(safe-area-inset-top));
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    width: min(320px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    transform: translateX(-50%);
+  }
+
+  .mobile-actions button > small,
+  .action-hint {
+    display: none;
+  }
+
+  .owner-card:not(.is-expanded) {
+    top: calc(max(8px, env(safe-area-inset-top)) + 52px);
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(188px, calc(100vw - 126px));
+    max-width: 188px;
+    min-height: 48px;
+    max-height: 48px;
+    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    gap: 4px;
+    padding: 2px;
+    overflow: hidden;
+  }
+
+  .owner-card:not(.is-expanded) .owner-emblem {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .owner-card:not(.is-expanded) .owner-copy {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+  }
+
+  .owner-card:not(.is-expanded) .owner-copy strong,
+  .owner-card:not(.is-expanded) #owner-id {
+    width: 100%;
+    max-width: 100%;
+    line-height: 1.1;
+  }
+
+  .owner-card:not(.is-expanded) .owner-copy strong {
+    font-size: 11px;
+  }
+
+  .owner-card:not(.is-expanded) #owner-id {
+    font-size: 9px;
+  }
+
+  .owner-card.is-expanded {
+    top: calc(max(8px, env(safe-area-inset-top)) + 52px);
+    right: max(8px, env(safe-area-inset-right));
+    bottom: auto;
+    left: auto;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    max-height: min(280px, calc(100dvh - 16px));
+    grid-template-columns: 40px minmax(0, 1fr) 44px;
+    padding: 8px;
+    overflow: hidden auto;
+  }
+
+  .game-shell:has(.world-panel.is-expanded) .brand-panel,
+  .game-shell:has(.world-panel.is-expanded) .mission-panel,
+  .game-shell:has(.world-panel.is-expanded) .owner-card,
+  .game-shell:has(.world-panel.is-expanded) .highlight-banner,
+  .game-shell:has(.world-panel.is-expanded) .build-tray,
+  .game-shell:has(.world-panel.is-expanded) .mobile-controls,
+  .game-shell:has(.world-panel.is-expanded) .crosshair,
+  .game-shell:has(.owner-card.is-expanded) .brand-panel,
+  .game-shell:has(.owner-card.is-expanded) .mission-panel,
+  .game-shell:has(.owner-card.is-expanded) .highlight-banner,
+  .game-shell:has(.owner-card.is-expanded) .build-tray,
+  .game-shell:has(.owner-card.is-expanded) .mobile-controls,
+  .game-shell:has(.owner-card.is-expanded) .look-zone,
+  .game-shell:has(.owner-card.is-expanded) .crosshair,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .brand-panel,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .world-panel,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .owner-tooltip,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .owner-card,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .highlight-banner,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .build-tray,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .mobile-controls,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .look-zone,
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .crosshair,
+  .game-shell:has(.build-tray.is-palette-open) .brand-panel,
+  .game-shell:has(.build-tray.is-palette-open) .world-panel,
+  .game-shell:has(.build-tray.is-palette-open) .mission-panel,
+  .game-shell:has(.build-tray.is-palette-open) .owner-tooltip,
+  .game-shell:has(.build-tray.is-palette-open) .owner-card,
+  .game-shell:has(.build-tray.is-palette-open) .highlight-banner,
+  .game-shell:has(.build-tray.is-palette-open) .mobile-controls,
+  .game-shell:has(.build-tray.is-palette-open) .look-zone,
+  .game-shell:has(.build-tray.is-palette-open) .crosshair {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .game-shell:not(:has(.mission-panel:not(.is-collapsed))):not(
+      :has(.build-tray.is-palette-open)
+    ):has(.owner-card:not([hidden]))
+    .world-panel:not(.is-expanded) {
+    visibility: visible;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 760px) and (orientation: landscape) {
+  .mission-panel.is-collapsed {
+    top: calc(max(8px, env(safe-area-inset-top)) + 58px);
+    right: auto;
+    bottom: auto;
+    left: max(8px, env(safe-area-inset-left));
+    transform: none;
+  }
+}
+
+@media (max-width: 760px) and (orientation: portrait) {
+  .mission-panel.is-collapsed {
+    top: auto;
+    right: auto;
+    bottom: calc(max(8px, env(safe-area-inset-bottom)) + 128px);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+/* Final creator disclosure guard. */
+.owner-card:not(.is-expanded) {
+  display: none !important;
+}
+
+.owner-card.is-expanded .owner-card-toggle {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+}
+
+.owner-card.is-expanded .owner-card-toggle .ui-icon {
+  transform: none;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .game-shell:has(.world-panel.is-expanded) .owner-tooltip,
+  .game-shell:has(.owner-card.is-expanded) .world-panel,
+  .game-shell:has(.owner-card.is-expanded) .owner-tooltip {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (pointer: coarse) and (orientation: landscape),
+  (max-width: 760px) and (orientation: landscape) {
+  .highlight-banner {
+    top: auto;
+    right: auto;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: 50%;
+    width: min(250px, calc(100vw - 270px));
+    max-width: 250px;
+    transform: translateX(-50%);
+  }
+}
+
+/* Semantic button system --------------------------------------------------
+   Actions keep their meaning independent from DOM order. Component rules
+   above continue to own placement; these classes own control hierarchy. */
+button.ui-button {
+  display: inline-flex;
+  min-width: 0;
+  min-height: var(--control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--control-gap);
+  padding: 7px var(--control-padding-x);
+  overflow: hidden;
+  border: 1px solid var(--button-secondary-border);
+  border-radius: var(--control-radius);
+  color: var(--button-secondary-ink);
+  background: var(--button-secondary-bg);
+  box-shadow: none;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+button.ui-button.ui-button--primary {
+  color: var(--button-primary-ink) !important;
+  border-color: transparent !important;
+  background: var(--button-primary-bg) !important;
+  box-shadow: var(--button-primary-shadow);
+  font-weight: 800;
+}
+
+button.ui-button.ui-button--secondary {
+  color: var(--button-secondary-ink) !important;
+  border-color: var(--button-secondary-border) !important;
+  background: var(--button-secondary-bg) !important;
+}
+
+button.ui-button.ui-button--danger {
+  color: var(--button-danger-ink) !important;
+  border-color: var(--button-danger-border) !important;
+  background: var(--button-danger-bg) !important;
+}
+
+button.ui-button.ui-button--quiet {
+  color: var(--button-quiet-ink) !important;
+  border-color: rgba(219, 237, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  box-shadow: none;
+}
+
+button.ui-button.ui-button--compact {
+  min-height: var(--control-height-compact);
+  padding: 5px 9px;
+  font-size: 9px;
+}
+
+button.ui-button.ui-button--icon {
+  width: var(--button-icon-size, var(--control-height));
+  min-width: var(--button-icon-size, var(--control-height));
+  height: var(--button-icon-size, var(--control-height));
+  min-height: var(--button-icon-size, var(--control-height));
+  padding: 0;
+  flex: 0 0 var(--button-icon-size, var(--control-height));
+}
+
+button.ui-button.ui-button--toggle:is(
+    .is-selected,
+    [aria-pressed="true"],
+    [aria-expanded="true"]
+  ) {
+  color: var(--button-selected-ink) !important;
+  border-color: var(--button-selected-border) !important;
+  background: var(--button-selected-bg) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 240, 198, 0.08),
+    0 0 16px rgba(120, 240, 198, 0.08);
+}
+
+button.ui-button:disabled,
+button.ui-button[aria-disabled="true"] {
+  color: rgba(231, 242, 255, 0.42) !important;
+  border-color: rgba(219, 237, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  box-shadow: none;
+  opacity: 0.58;
+  cursor: not-allowed;
+  transform: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  button.ui-button:not(:disabled):not([aria-disabled="true"]):hover {
+    border-color: rgba(219, 237, 255, 0.32);
+    background-color: rgba(255, 255, 255, 0.13);
+  }
+
+  button.ui-button.ui-button--primary:not(:disabled):hover {
+    box-shadow: 0 10px 26px rgba(120, 240, 198, 0.25);
+  }
+
+  button.ui-button.ui-button--danger:not(:disabled):hover {
+    border-color: rgba(255, 164, 159, 0.72) !important;
+    background: rgba(184, 67, 76, 0.74) !important;
+  }
+}
+
+button.ui-button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+.hud-actions,
+.owner-actions,
+.mission-panel-actions {
+  gap: var(--control-gap);
+}
+
+.hud-actions button.ui-button,
+.owner-actions button.ui-button,
+.mission-panel-actions button.ui-button {
+  min-width: 0;
+  flex: 1 1 0;
+}
+
+.analytics-consent-choice.ui-button {
+  display: grid;
+  min-height: 84px;
+  white-space: normal;
+}
+
+.contributor-light.ui-button {
+  justify-content: flex-start;
+  white-space: normal;
+}
+
+.mission-palette-choices button.ui-button--icon {
+  --button-icon-size: 30px;
+}
+
+.palette-row button.ui-button--icon {
+  --button-icon-size: 23px;
+}
+
+.mobile-actions button.ui-button {
+  --button-icon-size: 54px;
+  display: grid;
+  padding: 5px 3px;
+}
+
+.owner-card.is-expanded .owner-card-toggle.ui-button--icon {
+  --button-icon-size: var(--control-height);
+}
+
+.start-card #start-button.ui-button {
+  min-width: min(210px, 100%);
+  min-height: 48px;
+}
+
+.fatal-card #fatal-retry-button.ui-button {
+  min-width: min(210px, 100%);
+  min-height: 44px;
+}
+
+.recovery-notice #recovery-retry-button.ui-button {
+  min-width: 88px;
+  min-height: 44px;
+}
+
+.boot-error button {
+  min-height: 44px;
+  padding: 8px var(--control-padding-x);
+  border-radius: var(--control-radius);
+  color: var(--button-primary-ink);
+  background: var(--button-primary-bg);
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  button.ui-button {
+    min-height: var(--control-hit-mobile);
+  }
+
+  button.ui-button.ui-button--compact {
+    min-height: var(--control-hit-mobile);
+  }
+
+  button.ui-button.ui-button--icon {
+    --button-icon-size: var(--control-hit-mobile);
+  }
+
+  .mission-palette-choices button.ui-button--icon,
+  .palette-row button.ui-button--icon {
+    --button-icon-size: var(--control-hit-mobile);
+  }
+
+  .mobile-actions button.ui-button {
+    --button-icon-size: 54px;
+  }
+
+  .owner-card.is-expanded .owner-card-toggle.ui-button--icon {
+    --button-icon-size: var(--control-hit-mobile);
+  }
+
+  .mission-archive-shell > header > button.ui-button {
+    min-height: var(--control-hit-mobile);
+  }
+}
+
+@media (pointer: coarse) and (max-height: 520px),
+  (max-width: 760px) and (max-height: 520px),
+  (max-width: 400px) and (max-height: 700px) {
+  .mobile-actions button.ui-button {
+    --button-icon-size: 48px;
+  }
+}
+
+/* Unified player profile and build status ------------------------------- */
+.profile-status-panel.world-panel {
+  top: max(18px, env(safe-area-inset-top));
+  right: auto;
+  left: max(18px, env(safe-area-inset-left));
+  width: auto;
+  max-width: min(620px, calc(100vw - 92px));
+}
+
+.profile-status-panel > .brand-panel {
+  position: static;
+  display: flex;
+  min-width: 188px;
+  padding: 0;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.profile-crest {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.profile-crest .creator-crest {
+  width: 30px;
+  height: 30px;
+}
+
+.profile-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.profile-copy strong,
+.profile-copy small,
+.profile-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-copy strong {
+  font-size: 12px;
+}
+
+.profile-copy small {
+  display: flex;
+  gap: 5px;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.profile-copy #player-profile-public-id {
+  display: inline-block;
+  color: var(--mint);
+}
+
+.profile-copy #world-mode {
+  display: inline-block;
+}
+
+.profile-status-details {
+  display: contents;
+}
+
+.profile-status-panel.is-expanded > .brand-panel {
+  width: 100%;
+  min-width: 0;
+  padding-right: 44px;
+}
+
+.profile-status-panel.is-expanded .profile-status-details {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.floating-settings.analytics-settings-button {
+  position: absolute;
+  z-index: 36;
+  top: max(18px, env(safe-area-inset-top));
+  right: max(18px, env(safe-area-inset-right));
+  left: auto;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin: 0;
+}
+
+.palette-heading {
+  grid-column: 1 / -1;
+  padding: 1px 3px 3px;
+  color: var(--muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .profile-status-panel.world-panel:not(.is-expanded) {
+    top: max(8px, env(safe-area-inset-top));
+    right: auto;
+    left: max(8px, env(safe-area-inset-left));
+    width: min(206px, calc(100vw - 72px));
+    min-width: 0;
+    max-width: min(206px, calc(100vw - 72px));
+    height: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    padding: 4px;
+    overflow: hidden;
+  }
+
+  .profile-status-panel > .brand-panel,
+  .profile-status-panel:not(.is-expanded) > .brand-panel {
+    position: static;
+    display: grid !important;
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    align-items: center;
+    gap: 5px;
+    padding: 0;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .profile-status-panel .profile-copy {
+    display: flex !important;
+  }
+
+  .profile-status-panel:not(.is-expanded) .profile-copy small {
+    display: block;
+  }
+
+  .profile-status-panel:not(.is-expanded) #world-mode {
+    display: none;
+  }
+
+  .profile-status-panel:not(.is-expanded) .profile-status-details {
+    display: none;
+  }
+
+  .profile-status-panel:not(.is-expanded) .world-panel-toggle {
+    position: static;
+    order: initial;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .profile-status-panel.world-panel.is-expanded {
+    top: max(8px, env(safe-area-inset-top));
+    right: auto;
+    left: max(8px, env(safe-area-inset-left));
+    width: min(310px, calc(100vw - 72px));
+    max-width: calc(100vw - 72px);
+    max-height: calc(100dvh - 16px);
+    padding: 8px;
+    overflow: hidden auto;
+  }
+
+  .profile-status-panel.is-expanded > .brand-panel {
+    display: grid !important;
+    padding-right: 0;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .profile-status-panel.is-expanded .world-panel-toggle {
+    position: static;
+  }
+
+  .profile-status-panel.is-expanded .profile-status-details {
+    display: flex;
+  }
+
+  .profile-status-panel.is-expanded .progress-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .floating-settings.analytics-settings-button {
+    top: max(8px, env(safe-area-inset-top));
+    right: max(8px, env(safe-area-inset-right));
+    left: auto;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    margin: 0;
+    visibility: visible !important;
+    pointer-events: auto !important;
+  }
+
+  .game-shell:has(.world-panel.is-expanded) .floating-settings {
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .floating-settings,
+  .game-shell:has(.owner-card.is-expanded) .floating-settings {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .game-shell:has(.mission-panel:not(.is-collapsed)) .profile-status-panel,
+  .game-shell:has(.build-tray.is-palette-open) .profile-status-panel,
+  .game-shell:has(.owner-card.is-expanded) .profile-status-panel,
+  .game-shell:has(.mission-panel:not(.is-collapsed))
+    .profile-status-panel
+    > .brand-panel,
+  .game-shell:has(.build-tray.is-palette-open)
+    .profile-status-panel
+    > .brand-panel,
+  .game-shell:has(.owner-card.is-expanded)
+    .profile-status-panel
+    > .brand-panel {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .build-tray .palette-row {
+    grid-template-columns: repeat(6, 44px);
   }
 }
