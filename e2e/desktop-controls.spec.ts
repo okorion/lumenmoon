@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 test.describe("데스크톱 건축 조작", () => {
   test.beforeEach(async ({ page }) => {
@@ -37,22 +37,26 @@ test.describe("데스크톱 건축 조작", () => {
       "false",
     );
 
-    // 시작 지점에서 아래를 바라보면 결정적 지면 블록이 조준 범위에 들어온다.
-    await page.keyboard.down("KeyK");
-    await page.waitForTimeout(500);
-    await page.keyboard.up("KeyK");
-    await expect(page.locator("#action-hint")).not.toHaveText(
-      "블록을 조준해 보세요",
-    );
+    const actionHint = page.locator("#action-hint");
+    await aimAtGroundBlock(page, actionHint);
     await expect(page.locator("#owner-tooltip")).toBeHidden();
     await page.keyboard.press("KeyC");
     await expect(page.locator("#owner-card")).toBeHidden();
 
-    await page.mouse.click(720, 450, { button: "right" });
+    // Pointer Lock에서는 좌표 이동 없이 현재 조준점에 보조 클릭만 보낸다.
+    // mouse.click(x, y)는 합성 이동 이벤트로 카메라까지 돌릴 수 있다.
+    await page.mouse.down({ button: "right" });
+    await page.mouse.up({ button: "right" });
     const notice = page.locator("#owner-notice");
     await expect(notice).toBeVisible();
-    await expect(page.locator("#owner-notice-name")).not.toHaveText("");
-    await expect(page.locator("#owner-notice-date")).not.toHaveText("");
+    await expect(page.locator("#owner-notice-name")).not.toHaveText(
+      "조준한 블록이 없어요",
+    );
+    await expect(page.locator("#owner-notice-date")).toBeVisible();
+    await expect(page.locator("#owner-notice-date")).toHaveAttribute(
+      "datetime",
+      /\d{4}-\d{2}-\d{2}T/u,
+    );
     await expect(notice).toHaveCSS("opacity", "1");
     await page.locator(".performance-hud").evaluate((element) => {
       (element as HTMLElement).hidden = true;
@@ -189,3 +193,25 @@ test.describe("데스크톱 건축 조작", () => {
     await expect(missionPanel).toBeVisible();
   });
 });
+
+async function aimAtGroundBlock(
+  page: Page,
+  actionHint: Locator,
+): Promise<void> {
+  // 키를 계속 누른 시간은 렌더 FPS에 따라 회전량이 달라진다. 짧은 burst마다
+  // 실제 조준 상태를 확인해 저성능 CI에서도 블록을 지나쳐 버리지 않게 한다.
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    await page.keyboard.down("KeyK");
+    await page.waitForTimeout(40);
+    await page.keyboard.up("KeyK");
+    if ((await actionHint.textContent()) !== "블록을 조준해 보세요") {
+      // 첫 접촉 경계보다 안쪽을 바라보게 한 번 더 작게 이동한다.
+      await page.keyboard.down("KeyK");
+      await page.waitForTimeout(60);
+      await page.keyboard.up("KeyK");
+      await expect(actionHint).not.toHaveText("블록을 조준해 보세요");
+      return;
+    }
+  }
+  throw new Error("결정적 지면 블록을 조준하지 못했습니다.");
+}
