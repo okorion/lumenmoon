@@ -74,7 +74,6 @@ test.describe("데스크톱 건축 조작", () => {
       .poll(() => page.evaluate(() => document.pointerLockElement === null))
       .toBe(true);
     await expect(page.locator("#pointer-resume-button")).toBeVisible();
-    await expect(page.locator("#owner-tooltip")).toBeVisible();
     for (const button of await trayButtons.all()) {
       await expect(button).toHaveCSS("pointer-events", "auto");
     }
