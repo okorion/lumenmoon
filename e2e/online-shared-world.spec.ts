@@ -54,7 +54,10 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test("A 온보딩부터 B의 제작자 확인, 재접속, 다음 미션까지 이어진다", async ({
     browser,
   }) => {
-    test.setTimeout(600_000);
+    // Linux software WebGL에서 모바일 행렬·데스크톱·context loss·마지막 슬롯
+    // 경쟁·기록관·재접속을 모두 검증하면 10분을 넘는다. 개별 UI action은
+    // 15초로 유지하고 전체 시나리오 수명만 충분히 확보한다.
+    test.setTimeout(900_000);
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
     await waitForSupabaseReady(requiredAnonKey());
 
