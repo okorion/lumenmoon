@@ -820,6 +820,90 @@ input[type="range"]:focus-visible,
   white-space: nowrap;
 }
 
+.owner-notice {
+  position: absolute;
+  z-index: 24;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid rgba(164, 225, 255, 0.2);
+  border-radius: 14px;
+  color: rgba(245, 250, 255, 0.92);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.97);
+  white-space: nowrap;
+}
+
+.owner-notice[hidden] {
+  display: none;
+}
+
+.owner-notice span,
+.owner-notice time {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.owner-notice strong {
+  font-size: 13px;
+}
+
+.owner-notice.is-showing {
+  animation: owner-notice-fade 1.8s ease both;
+}
+
+.game-shell:has(.owner-notice.is-showing) .action-hint {
+  opacity: 0;
+}
+
+@keyframes owner-notice-fade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+
+  14%,
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -54%) scale(0.99);
+  }
+}
+
+@media (pointer: fine) and (min-width: 761px) {
+  .game-shell.is-pointer-locked :is(
+    button,
+    input,
+    select,
+    textarea,
+    [role="button"]
+  ) {
+    pointer-events: none !important;
+  }
+
+  .game-shell:has(.world-panel.is-expanded) .mission-panel {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-notice.is-showing {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
 .removal-hold {
   position: absolute;
   z-index: 10;
@@ -4856,5 +4940,474 @@ button.ui-button:not(:disabled):active {
 
   .game-mode-choice {
     min-height: 56px;
+  }
+}
+
+/* Desktop HUD readability -------------------------------------------------
+   Fine-pointer layouts have enough room to use a more legible type and
+   control scale. Keep this final and desktop-only so compact mobile HUD
+   rules retain their exact sizing. */
+@media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
+  :root {
+    --control-height: 40px;
+    --control-height-compact: 36px;
+    --control-radius: 12px;
+    --control-padding-x: 14px;
+    --control-gap: 8px;
+  }
+
+  .game-shell {
+    --desktop-hud-title: 16px;
+    --desktop-hud-body: 12px;
+    --desktop-hud-small: 10px;
+  }
+
+  button.ui-button {
+    font-size: 11px;
+  }
+
+  button.ui-button.ui-button--compact {
+    padding-inline: 11px;
+    font-size: 10px;
+  }
+
+  .profile-status-panel.world-panel {
+    max-width: min(680px, calc(100vw - 104px));
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .profile-status-panel > .brand-panel {
+    min-width: 218px;
+    gap: 10px;
+  }
+
+  .profile-crest {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 13px;
+  }
+
+  .profile-crest .creator-crest {
+    width: 35px;
+    height: 35px;
+  }
+
+  .profile-copy strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .profile-copy small {
+    gap: 7px;
+    margin-top: 4px;
+    font-size: var(--desktop-hud-small);
+    line-height: 1.2;
+  }
+
+  .world-panel-toggle {
+    --button-icon-size: 42px;
+  }
+
+  .world-panel-toggle .ui-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .world-panel-toggle kbd,
+  .tool-button kbd {
+    top: 3px;
+    right: 4px;
+    font-size: 8px;
+  }
+
+  .world-panel.is-expanded {
+    width: min(360px, calc(100vw - 36px));
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .world-panel.is-expanded .world-status-row,
+  .world-panel.is-expanded .production-status {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.35;
+  }
+
+  .world-panel.is-expanded .progress-grid > span {
+    min-height: 44px;
+    gap: 2px;
+    padding: 6px;
+  }
+
+  .world-panel .progress-grid strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .world-panel.is-expanded .progress-grid small,
+  .manual-stage {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .shortcut-guide {
+    gap: 6px;
+    padding-top: 9px;
+  }
+
+  .shortcut-guide > div {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .shortcut-guide dt,
+  .shortcut-guide dd {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.45;
+  }
+
+  .free-mode-details > span {
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .free-mode-details small {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .free-mode-details strong {
+    font-size: 14px;
+  }
+
+  .mission-panel {
+    top: 92px;
+    width: min(326px, calc(100vw - 36px));
+    max-height: calc(100dvh - 188px);
+    padding: 15px;
+  }
+
+  .mission-panel.is-collapsed {
+    width: min(296px, calc(100vw - 36px));
+    padding: 12px 13px;
+  }
+
+  .mission-heading small,
+  .mission-choice > small,
+  .mission-recent > small,
+  .contributor-lights-heading small {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.3;
+  }
+
+  .mission-heading strong {
+    margin-top: 3px;
+    font-size: var(--desktop-hud-title);
+    line-height: 1.25;
+  }
+
+  .mission-stage {
+    padding: 6px 9px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .mission-stage .ui-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .mission-panel-toggle {
+    --button-icon-size: 38px;
+  }
+
+  .mission-progress {
+    height: 7px;
+    margin-top: 12px;
+  }
+
+  .mission-progress-copy {
+    margin-top: 7px;
+  }
+
+  .mission-progress-copy strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .mission-progress-copy span,
+  .mission-stats small,
+  .mission-stats strong,
+  .mission-recent-list,
+  .mission-recent-item strong,
+  .mission-recent-item small,
+  .mission-slot-choices button,
+  .contributor-light-identity strong,
+  .contributor-light-identity small {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .mission-stats > span {
+    min-height: 38px;
+    padding: 8px 9px;
+  }
+
+  .mission-recent-item {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .mission-recent-item > i {
+    flex-basis: 28px;
+    height: 28px;
+  }
+
+  .mission-slot-choices button {
+    min-height: 34px;
+    padding: 5px 7px;
+  }
+
+  .mission-palette-choices button.ui-button--icon {
+    --button-icon-size: 34px;
+  }
+
+  .mission-contribute-button {
+    min-height: 42px;
+    font-size: 11px;
+  }
+
+  .mission-panel-actions button {
+    min-height: 36px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .contributor-lights-heading strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .contributor-light {
+    width: 136px;
+    min-width: 136px;
+    height: 50px;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .owner-tooltip {
+    top: calc(50% + 32px);
+    width: min(420px, calc(100vw - 48px));
+    min-height: 50px;
+    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+    gap: 10px;
+    padding: 5px 5px 5px 13px;
+  }
+
+  .owner-notice {
+    min-height: 48px;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .owner-notice span,
+  .owner-notice time {
+    font-size: 11px;
+  }
+
+  .owner-notice strong {
+    font-size: 14px;
+  }
+
+  .owner-tooltip-crest,
+  .owner-tooltip-crest .creator-crest {
+    width: 32px;
+    height: 32px;
+  }
+
+  .owner-tooltip strong {
+    font-size: 13px;
+  }
+
+  .owner-tooltip time {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .owner-tooltip kbd {
+    font-size: 9px;
+  }
+
+  .owner-card {
+    top: 218px;
+    width: min(292px, calc(100vw - 36px));
+    gap: 14px;
+    padding: 15px;
+  }
+
+  .owner-card.is-expanded {
+    grid-template-columns: 46px minmax(0, 1fr) 40px;
+  }
+
+  .owner-emblem {
+    flex-basis: 46px;
+    height: 46px;
+  }
+
+  .owner-emblem .creator-crest {
+    width: 36px;
+    height: 36px;
+  }
+
+  .owner-copy small,
+  .owner-copy span,
+  #owner-id {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.35;
+  }
+
+  .owner-copy strong {
+    margin-block: 4px 2px;
+    font-size: var(--desktop-hud-title);
+  }
+
+  .owner-actions {
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .owner-actions button {
+    min-height: 36px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .owner-card.is-expanded .owner-card-toggle.ui-button--icon {
+    --button-icon-size: 40px;
+  }
+
+  .build-tray {
+    bottom: max(22px, env(safe-area-inset-bottom));
+    grid-template-columns: auto 44px auto;
+    gap: 9px;
+    padding: 9px;
+    border-radius: 18px;
+  }
+
+  .tool-button,
+  .palette-toggle {
+    --button-icon-size: 44px;
+  }
+
+  .tool-button .ui-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .palette-toggle i {
+    width: 23px;
+    height: 23px;
+  }
+
+  .build-tray .palette-row {
+    bottom: calc(100% + 9px);
+    grid-template-columns: repeat(12, 28px);
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .palette-row button.ui-button--icon {
+    --button-icon-size: 28px;
+  }
+
+  .palette-heading {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .block-stack {
+    min-width: 56px;
+    height: 44px;
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .block-stack .ui-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .block-stack strong {
+    font-size: 14px;
+  }
+
+  .action-hint {
+    top: calc(50% + 28px);
+    padding: 8px 13px;
+    font-size: 11px;
+  }
+
+  .removal-hold {
+    top: calc(50% + 64px);
+    width: 188px;
+    padding: 8px 9px 11px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .pointer-resume,
+  .cinematic-skip,
+  .highlight-banner {
+    font-size: 11px;
+  }
+
+  .highlight-banner {
+    min-height: 48px;
+    padding: 8px 9px 8px 14px;
+  }
+
+  .highlight-banner button {
+    min-height: 34px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .floating-settings.analytics-settings-button {
+    --button-icon-size: 48px;
+  }
+
+  .analytics-settings-button .ui-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .analytics-settings-shell {
+    width: min(720px, 100%);
+  }
+
+  .analytics-settings-shell header p {
+    font-size: 13px;
+  }
+
+  .sound-settings-heading h3,
+  .analytics-consent-heading h3,
+  .analytics-privacy-notice h3 {
+    font-size: 17px;
+  }
+
+  .sound-settings-heading p,
+  .analytics-consent-heading p {
+    font-size: 11px;
+  }
+
+  .sound-level {
+    grid-template-columns: 100px minmax(120px, 1fr) 46px;
+    gap: 12px;
+  }
+
+  .sound-level label {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .sound-level output,
+  .sound-settings-note,
+  .analytics-consent-choice small,
+  .analytics-privacy-notice dt,
+  .analytics-privacy-notice dd,
+  .analytics-privacy-notice p {
+    font-size: 11px;
+  }
+
+  .analytics-consent-choice strong {
+    font-size: 13px;
   }
 }

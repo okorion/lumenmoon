@@ -859,6 +859,9 @@ export class GameApp {
     this.latestHit = this.renderer.pick();
     this.updateTargetUi(this.latestHit);
 
+    if (input.inspectOwner) {
+      this.ui.showOwnerNotice(this.latestHit?.block ?? null);
+    }
     if (input.place) {
       const contributorPublicId =
         this.gameMode === "mission"
@@ -3603,6 +3606,7 @@ export class GameApp {
 
   private handlePointerLock(locked: boolean): void {
     this.controlsActive = locked;
+    this.ui.setPointerLocked(locked);
     if (!locked) {
       if (this.onlineRepository) {
         this.cancelOnlineRemovalHold();
@@ -3822,6 +3826,7 @@ function neutralInputFrame(): InputFrame {
     lookY: 0,
     jump: false,
     place: false,
+    inspectOwner: false,
     remove: false,
     removeHeld: false,
     rotate: false,
@@ -3840,6 +3845,7 @@ function hasAnalyticsInput(input: InputFrame): boolean {
     input.lookY !== 0 ||
     input.jump ||
     input.place ||
+    input.inspectOwner ||
     input.remove ||
     input.removeHeld ||
     input.rotate ||

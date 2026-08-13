@@ -76,7 +76,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run local accessibility E2E
-        run: npx playwright test e2e/accessibility.spec.ts
+        run: npx playwright test e2e/accessibility.spec.ts e2e/desktop-controls.spec.ts
         env:
           E2E_REPOSITORY_MODE: local
 

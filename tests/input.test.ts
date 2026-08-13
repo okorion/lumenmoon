@@ -239,6 +239,53 @@ describe("데스크톱 유틸리티 단축키", () => {
     expect(input.consumeFrame().removeHeld).toBe(false);
   });
 
+  it("데스크톱 우클릭은 제작자 조회만 요청하고 제거 입력을 만들지 않는다", () => {
+    const fakeWindow = new EventTarget();
+    const fakeDocument = new FakeDocument();
+    vi.stubGlobal("window", fakeWindow);
+    vi.stubGlobal("document", fakeDocument);
+    const { elements, controls } = createInputElements();
+    const input = new GameInput(elements, false, () => undefined);
+    fakeDocument.pointerLockElement = controls.canvas!;
+
+    controls.canvas!.dispatchEvent(
+      pointerEvent("pointerdown", {
+        pointerId: 9,
+        pointerType: "mouse",
+        button: 2,
+      }),
+    );
+
+    expect(input.consumeFrame()).toMatchObject({
+      inspectOwner: true,
+      remove: false,
+      removeHeld: false,
+    });
+    expect(input.consumeFrame()).toMatchObject({
+      inspectOwner: false,
+      remove: false,
+      removeHeld: false,
+    });
+  });
+
+  it("Escape는 데스크톱 시점 고정을 해제하고 대기 입력을 비운다", () => {
+    const fakeWindow = new EventTarget();
+    const fakeDocument = new FakeDocument();
+    vi.stubGlobal("window", fakeWindow);
+    vi.stubGlobal("document", fakeDocument);
+    const { elements, controls } = createInputElements();
+    const input = new GameInput(elements, false, () => undefined);
+    fakeDocument.pointerLockElement = controls.canvas!;
+
+    fakeWindow.dispatchEvent(keyboardEvent("keydown", "KeyW"));
+    const escape = keyboardEvent("keydown", "Escape");
+    fakeWindow.dispatchEvent(escape);
+
+    expect(escape.defaultPrevented).toBe(true);
+    expect(fakeDocument.exitPointerLockCalls).toBe(1);
+    expect(input.consumeFrame().moveForward).toBe(0);
+  });
+
   it("기존 점프·회전·종류·색상·유틸리티 단축키를 보존한다", () => {
     const fakeWindow = new EventTarget();
     const fakeDocument = new FakeDocument();

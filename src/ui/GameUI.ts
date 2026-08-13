@@ -159,6 +159,9 @@ export class GameUI {
   private readonly ownerHighlightButton: HTMLButtonElement;
   private readonly ownerFindButton: HTMLButtonElement;
   private readonly actionHint: HTMLElement;
+  private readonly ownerNotice: HTMLElement;
+  private readonly ownerNoticeName: HTMLElement;
+  private readonly ownerNoticeDate: HTMLTimeElement;
   private readonly saveState: HTMLElement;
   private readonly playerState: HTMLElement;
   private readonly toastElement: HTMLElement;
@@ -227,6 +230,7 @@ export class GameUI {
   private readonly analyticsEssentialButton: HTMLButtonElement;
   private soundSettingsPanel: SoundSettingsPanel | null = null;
   private toastTimer: number | null = null;
+  private ownerNoticeTimer: number | null = null;
   private missionState: MissionPanelState | null = null;
   private selectedMissionSlot: number | null = null;
   private selectedMissionColor: number | null = null;
@@ -247,6 +251,7 @@ export class GameUI {
   private hasEnteredWorld = false;
   private gameMode: GameMode = "free";
   private startPending = false;
+  private pointerLocked = false;
   private layoutOrientation = currentLayoutOrientation();
   private selection: BuildSelection = {
     kind: "cube",
@@ -257,8 +262,8 @@ export class GameUI {
   constructor(root: HTMLElement) {
     root.innerHTML = [
       '<section class="game-shell" aria-label="루멘문 게임">',
-      '<canvas id="game-canvas" tabindex="-1" aria-label="루멘문 3D 블록 월드" aria-describedby="game-canvas-description game-live-state" aria-keyshortcuts="W A S D ArrowUp ArrowDown ArrowLeft ArrowRight J K L U Enter Delete Space">이 브라우저에서는 루멘문 3D 월드를 표시할 수 없습니다.</canvas>',
-      '<p id="game-canvas-description" class="sr-only">3D 블록 월드입니다. WASD 또는 방향키로 이동하고, J와 L로 좌우를, U와 K로 위아래를 바라봅니다. Enter로 블록을 놓고 Delete를 누르고 있으면 블록을 제거하며 Space로 점프합니다.</p>',
+      '<canvas id="game-canvas" tabindex="-1" aria-label="루멘문 3D 블록 월드" aria-describedby="game-canvas-description game-live-state" aria-keyshortcuts="W A S D ArrowUp ArrowDown ArrowLeft ArrowRight J K L U Enter Delete Space Escape">이 브라우저에서는 루멘문 3D 월드를 표시할 수 없습니다.</canvas>',
+      '<p id="game-canvas-description" class="sr-only">3D 블록 월드입니다. WASD 또는 방향키로 이동하고, J와 L로 좌우를, U와 K로 위아래를 바라봅니다. Enter로 블록을 놓고 Delete를 누르고 있으면 블록을 제거하며 Space로 점프합니다. 데스크톱에서는 마우스 오른쪽 버튼으로 조준한 블록을 만든 사람을 확인하고, UI를 조작하려면 Escape로 시점 고정을 해제합니다.</p>',
       '<div class="sky-vignette" aria-hidden="true"></div>',
       '<aside class="profile-status-panel world-panel glass" data-testid="profile-status-panel" aria-label="내 정보와 블록 상태">',
       '<header class="brand-panel">',
@@ -345,6 +350,7 @@ export class GameUI {
       '<button id="cinematic-skip-button" class="cinematic-skip glass ui-button ui-button--quiet ui-button--compact" type="button" hidden>완성 연출 건너뛰기</button>',
       '<div class="crosshair" aria-hidden="true"><span></span><span></span></div>',
       '<div id="action-hint" class="action-hint glass">블록을 조준해 보세요</div>',
+      '<div id="owner-notice" class="owner-notice glass" role="status" aria-live="polite" hidden><span>만든 사람</span><strong id="owner-notice-name"></strong><time id="owner-notice-date"></time></div>',
       '<div id="removal-hold" class="removal-hold glass" role="progressbar" aria-label="다른 사람의 블록 제거" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" hidden><span>다른 사람의 블록 제거</span><i id="removal-hold-bar"></i></div>',
       '<section class="build-tray glass" aria-label="블록 선택">',
       '<div class="kind-row" role="group" aria-label="블록 모양">',
@@ -387,7 +393,7 @@ export class GameUI {
       '<button id="analytics-start-settings-button" class="analytics-start-settings-button ui-button ui-button--quiet" type="button">설정</button>',
       '<small id="storage-description">이 브라우저에 저장돼요</small>',
       '</div></section>',
-      '<button id="pointer-resume-button" class="pointer-resume glass ui-button ui-button--secondary ui-button--compact" type="button" hidden>화면을 눌러 계속하기</button>',
+      '<button id="pointer-resume-button" class="pointer-resume glass ui-button ui-button--secondary ui-button--compact" type="button" hidden>화면을 눌러 계속하기 · UI는 Esc</button>',
       '<section id="fatal-overlay" class="fatal-overlay" role="alertdialog" aria-modal="true" aria-labelledby="fatal-title" aria-describedby="fatal-message" hidden>',
       '<div class="fatal-card glass"><span aria-hidden="true">' + uiIcon("alert") + '</span><h2 id="fatal-title">화면을 열 수 없습니다</h2>',
       '<p id="fatal-message"></p><button id="fatal-retry-button" class="ui-button ui-button--primary" type="button">다시 시도</button></div>',
@@ -550,6 +556,17 @@ export class GameUI {
       HTMLButtonElement,
     );
     this.actionHint = requiredElement(root, "#action-hint", HTMLElement);
+    this.ownerNotice = requiredElement(root, "#owner-notice", HTMLElement);
+    this.ownerNoticeName = requiredElement(
+      root,
+      "#owner-notice-name",
+      HTMLElement,
+    );
+    this.ownerNoticeDate = requiredElement(
+      root,
+      "#owner-notice-date",
+      HTMLTimeElement,
+    );
     this.saveState = requiredElement(root, "#save-state", HTMLElement);
     this.playerState = requiredElement(root, "#player-state", HTMLElement);
     this.toastElement = requiredElement(root, "#toast", HTMLElement);
@@ -770,6 +787,23 @@ export class GameUI {
     this.setGameMode("free");
     this.setAnalyticsConsent("undecided");
     this.syncExclusiveSurface();
+    this.gameShell.addEventListener(
+      "click",
+      (event) => {
+        if (!this.pointerLocked || isTouchLayout()) {
+          return;
+        }
+        const target = event.target;
+        if (
+          target instanceof Element &&
+          target.closest("button, input, select, textarea, [role='button']")
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      },
+      true,
+    );
     window.addEventListener("resize", () => this.handleViewportChange());
     window.addEventListener("orientationchange", () =>
       this.handleViewportChange(),
@@ -871,6 +905,18 @@ export class GameUI {
         event.preventDefault();
         event.stopImmediatePropagation();
         this.closePalette();
+        return;
+      }
+      if (
+        this.pointerLocked &&
+        !isTouchLayout() &&
+        (event.code === "KeyI" ||
+          event.code === "KeyM" ||
+          event.code === "KeyC")
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.announceGameState("UI를 사용하려면 Escape로 시점 고정을 해제하세요.");
         return;
       }
       if (event.code === "KeyI" && !isEditableTarget(event.target)) {
@@ -1035,16 +1081,89 @@ export class GameUI {
   }
 
   bindSelection(handler: (selection: Readonly<BuildSelection>) => void): void {
-    document.querySelectorAll<HTMLButtonElement>("[data-kind]").forEach((button) => {
-      button.addEventListener("click", () => {
-        const kind = button.dataset["kind"] as BlockKind | undefined;
-        if (!kind) {
+    const kindButtons = [
+      ...this.buildTray.querySelectorAll<HTMLButtonElement>(
+        ".tool-button[data-kind]",
+      ),
+    ];
+    let activeDragPointer: number | null = null;
+    let dragOrigin: HTMLButtonElement | null = null;
+    let suppressNextPointerClick = false;
+
+    const applyKind = (
+      button: HTMLButtonElement,
+      notifyWhenUnchanged: boolean,
+    ): void => {
+      const kind = button.dataset["kind"] as BlockKind | undefined;
+      if (!kind) {
+        return;
+      }
+      const changed = this.selection.kind !== kind;
+      this.selectKind(kind);
+      if (changed || notifyWhenUnchanged) {
+        handler(this.selection);
+      }
+    };
+
+    for (const button of kindButtons) {
+      button.addEventListener("click", (event) => {
+        if (suppressNextPointerClick && event.detail !== 0) {
+          suppressNextPointerClick = false;
+          event.preventDefault();
           return;
         }
-        this.selectKind(kind);
-        handler(this.selection);
+        suppressNextPointerClick = false;
+        applyKind(button, true);
       });
+      button.addEventListener("pointerdown", (event) => {
+        if (
+          event.pointerType !== "mouse" ||
+          event.button !== 0 ||
+          isTouchLayout() ||
+          document.pointerLockElement !== null
+        ) {
+          return;
+        }
+        activeDragPointer = event.pointerId;
+        dragOrigin = button;
+        button.setPointerCapture(event.pointerId);
+        applyKind(button, false);
+      });
+    }
+
+    window.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== activeDragPointer) {
+        return;
+      }
+      const candidate = document
+        .elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLButtonElement>(".tool-button[data-kind]");
+      if (!candidate || !this.buildTray.contains(candidate)) {
+        return;
+      }
+      applyKind(candidate, false);
     });
+
+    const finishKindDrag = (event: PointerEvent, expectClick: boolean): void => {
+      if (event.pointerId !== activeDragPointer) {
+        return;
+      }
+      if (
+        dragOrigin &&
+        dragOrigin.hasPointerCapture(event.pointerId)
+      ) {
+        dragOrigin.releasePointerCapture(event.pointerId);
+      }
+      activeDragPointer = null;
+      dragOrigin = null;
+      suppressNextPointerClick = expectClick;
+    };
+    window.addEventListener("pointerup", (event) =>
+      finishKindDrag(event, true),
+    );
+    window.addEventListener("pointercancel", (event) =>
+      finishKindDrag(event, false),
+    );
 
     document.querySelectorAll<HTMLButtonElement>("[data-color]").forEach((button) => {
       button.addEventListener("click", () => {
@@ -1097,6 +1216,15 @@ export class GameUI {
     this.canvas.focus();
   }
 
+  setPointerLocked(locked: boolean): void {
+    this.pointerLocked = locked;
+    this.gameShell.classList.toggle("is-pointer-locked", locked);
+    if (locked) {
+      this.pointerResumeButton.hidden = true;
+    }
+    this.syncHighlightSurfaces();
+  }
+
   showPointerLockPrompt(): void {
     if (isTouchLayout()) {
       return;
@@ -1110,6 +1238,41 @@ export class GameUI {
     this.startButton.innerHTML =
       '<span>시점 다시 연결</span>' + uiIcon("enter");
     this.startOverlay.classList.remove("is-hidden");
+  }
+
+  showOwnerNotice(block: VoxelBlock | null): void {
+    if (isTouchLayout()) {
+      return;
+    }
+    if (this.ownerNoticeTimer !== null) {
+      window.clearTimeout(this.ownerNoticeTimer);
+    }
+    if (block) {
+      const date = formatOwnerTooltipDate(block.createdAt);
+      this.ownerNoticeName.textContent = block.owner.nickname;
+      this.ownerNoticeDate.hidden = false;
+      this.ownerNoticeDate.textContent = "· " + date;
+      this.ownerNoticeDate.dateTime = Number.isFinite(block.createdAt)
+        ? new Date(block.createdAt).toISOString()
+        : "";
+      this.announceGameState(`${block.owner.nickname}, 놓은 날짜 ${date}.`);
+    } else {
+      this.ownerNoticeName.textContent = "조준한 블록이 없어요";
+      this.ownerNoticeDate.hidden = true;
+      this.ownerNoticeDate.textContent = "";
+      this.ownerNoticeDate.dateTime = "";
+      this.announceGameState("조준한 블록이 없습니다.");
+    }
+    this.ownerNotice.hidden = false;
+    this.ownerNotice.classList.remove("is-showing");
+    // Restart the finite fade animation when secondary click is repeated.
+    void this.ownerNotice.offsetWidth;
+    this.ownerNotice.classList.add("is-showing");
+    this.ownerNoticeTimer = window.setTimeout(() => {
+      this.ownerNotice.classList.remove("is-showing");
+      this.ownerNotice.hidden = true;
+      this.ownerNoticeTimer = null;
+    }, 1_900);
   }
 
   setOwnerBlock(
@@ -1923,8 +2086,12 @@ export class GameUI {
   private syncHighlightSurfaces(): void {
     const highlighted = this.highlightedOwner;
     const ownerDetailsExpanded = this.ownerCard.classList.contains("is-expanded");
+    const creatorSummaryIsGestureOnly =
+      !isTouchLayout() && this.pointerLocked;
     this.ownerTooltip.hidden =
-      !this.ownerTargetPresent || ownerDetailsExpanded;
+      !this.ownerTargetPresent ||
+      ownerDetailsExpanded ||
+      creatorSummaryIsGestureOnly;
     this.ownerCard.hidden = !ownerDetailsExpanded;
     const ownerCardCarriesControls =
       highlighted !== null &&
@@ -1943,7 +2110,7 @@ export class GameUI {
 
   private toggleWorldPanel(): void {
     const expanded = !this.worldPanel.classList.contains("is-expanded");
-    if (expanded && isTouchLayout()) {
+    if (expanded) {
       this.setMissionPanelExpanded(false);
       this.closePalette();
     }
@@ -2022,7 +2189,7 @@ export class GameUI {
   }
 
   private setMissionPanelExpanded(expanded: boolean): void {
-    if (expanded && isTouchLayout()) {
+    if (expanded) {
       this.setWorldPanelExpanded(false);
       this.closePalette();
     }
@@ -2129,8 +2296,8 @@ export class GameUI {
     }
     this.startDescription.textContent =
       this.gameMode === "free"
-        ? "WASD 이동 · J/L/U/K 시점 · Enter 놓기 · Delete 제거 · Space 점프 · 1/2/3 모양 · Q/E 색 · R 회전 · I 가방"
-        : "WASD 이동 · J/L/U/K 시점 · Enter 놓기 · Delete 제거 · Space 점프 · 1/2/3 모양 · Q/E 색 · R 회전 · I 가방 · F 만들기 · X 다시 짓기 · M 관문";
+        ? "WASD 이동 · 클릭 놓기 · 우클릭 만든 사람 · Delete 제거 · Esc UI · 1/2/3 모양"
+        : "WASD 이동 · 클릭 놓기 · 우클릭 만든 사람 · Delete 제거 · Esc UI · 1/2/3 모양 · F 만들기 · M 관문";
   }
 }
 

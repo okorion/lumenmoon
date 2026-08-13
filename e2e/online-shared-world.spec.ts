@@ -54,7 +54,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test("A 온보딩부터 B의 제작자 확인, 재접속, 다음 미션까지 이어진다", async ({
     browser,
   }) => {
-    test.setTimeout(480_000);
+    test.setTimeout(600_000);
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
     await waitForSupabaseReady(requiredAnonKey());
 
@@ -125,8 +125,9 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     await aContext.close();
 
     const bContext = await createMobileContext(browser, actorB.session);
-    const bPage = await bContext.newPage();
-    const bErrors = observePageErrors(bPage);
+    let bPage = await bContext.newPage();
+    const bErrors: string[] = [];
+    observePageErrors(bPage, bErrors);
     await openPlayableWorld(bPage);
     await expectOnboardingHud(bPage, 2);
     await assertProfileStatusComposition(bPage, actorB.bootstrap);
@@ -208,6 +209,10 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     }
 
     const bStorageState = await bContext.storageState();
+    // 동일 이용자의 모바일 월드가 계속 frame/동기화를 수행한 채 데스크톱
+    // 컨텍스트를 부팅하면 저성능 CI에서 시작 RPC가 불필요하게 경합한다.
+    // 저장 상태는 context에 남기고 page만 닫아 데스크톱 흐름을 독립시킨다.
+    await bPage.close();
 
     const desktopContext = await browser.newContext({
       viewport: { width: 1440, height: 900 },
@@ -217,6 +222,37 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     const desktopPage = await desktopContext.newPage();
     const desktopErrors = observePageErrors(desktopPage);
     await openPlayableWorld(desktopPage);
+    await desktopPage.keyboard.press("KeyM");
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await desktopPage.keyboard.press("Escape");
+    await expect
+      .poll(() =>
+        desktopPage.evaluate(() => document.pointerLockElement === null),
+      )
+      .toBe(true);
+    // pointerlockchange가 UI 상태에 반영된 뒤에만 단축키를 검증한다. 브라우저의
+    // 실제 lock 해제와 GameUI 이벤트 사이에는 한 프레임 정도 차이가 날 수 있다.
+    await expect(desktopPage.locator("#pointer-resume-button")).toBeVisible();
+    await desktopPage.keyboard.press("KeyM");
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await desktopPage.locator("#world-panel-toggle").click();
+    await expect(desktopPage.locator("#world-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(desktopPage.locator("#mission-panel")).toBeHidden();
+    await desktopPage.locator("#world-panel-toggle").click();
+    await expect(desktopPage.locator("#mission-panel")).toBeVisible();
     await ensureMissionPanelExpanded(desktopPage);
     const desktopLight = desktopPage.locator(
       `[data-contributor-id="${actorA.bootstrap.player.publicId}"]`,
@@ -315,8 +351,9 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       archive.missions.filter(({ id }) => id === missionAfterA.id),
     ).toHaveLength(1);
 
-    await bPage.reload({ waitUntil: "domcontentloaded" });
-    await openPlayableWorld(bPage, false);
+    bPage = await bContext.newPage();
+    observePageErrors(bPage, bErrors);
+    await openPlayableWorld(bPage);
     await ensureMissionPanelExpanded(bPage);
     await bPage.locator("#mission-archive-button").click();
     await expect(bPage.locator("#mission-archive-overlay")).toBeVisible();
@@ -663,7 +700,12 @@ async function openPlayableWorld(
   ).toBeChecked();
   await expect(page.locator("#start-button")).toBeVisible();
   await page.locator("#start-button").click();
-  await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u);
+  // 온라인 미션 진입은 bootstrap/nearby/production/mission/archive 읽기를
+  // 순서대로 마친다. 일반 UI action의 15초 제한은 유지하되 이 권위 초기화
+  // 완료만 별도 상한을 둬 느린 CI를 click 실패로 오판하지 않는다.
+  await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u, {
+    timeout: 45_000,
+  });
   await expect(page.locator(".start-overlay")).toBeHidden();
   await expect(page.locator("#mission-panel")).toBeVisible();
 }
@@ -791,14 +833,17 @@ async function expectCreatorCard(
     await ownerMore.click();
   } else {
     const resume = page.locator("#pointer-resume-button");
-    if (await resume.isVisible()) {
-      await resume.click();
+    if (
+      await page.evaluate(
+        () => document.pointerLockElement?.id === "game-canvas",
+      )
+    ) {
+      await page.keyboard.press("Escape");
     }
     await expect
-      .poll(() =>
-        page.evaluate(() => document.pointerLockElement?.id ?? null),
-      )
-      .toBe("game-canvas");
+      .poll(() => page.evaluate(() => document.pointerLockElement === null))
+      .toBe(true);
+    await expect(resume).toBeVisible();
     await page.keyboard.press("KeyC");
     await expect
       .poll(() => page.evaluate(() => document.pointerLockElement === null))
@@ -1427,8 +1472,7 @@ async function assertDesktopLayout(page: Page): Promise<void> {
   expect(result.bodyHeight).toBeLessThanOrEqual(result.viewportHeight + 1);
 }
 
-function observePageErrors(page: Page): string[] {
-  const errors: string[] = [];
+function observePageErrors(page: Page, errors: string[] = []): string[] {
   page.on("pageerror", (error) => errors.push(error.name));
   page.on("response", (response) => {
     if (response.status() >= 400) {

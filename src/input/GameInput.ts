@@ -7,6 +7,7 @@ export interface InputFrame {
   lookY: number;
   jump: boolean;
   place: boolean;
+  inspectOwner: boolean;
   remove: boolean;
   removeHeld: boolean;
   rotate: boolean;
@@ -67,6 +68,7 @@ export class GameInput {
   private lookY = 0;
   private jumpQueued = false;
   private placeQueued = false;
+  private inspectOwnerQueued = false;
   private removeQueued = false;
   private removeHeld = false;
   private keyboardRemoveHeld = false;
@@ -145,6 +147,7 @@ export class GameInput {
       lookY: this.lookY + keyboardLookY * KEYBOARD_LOOK_DELTA,
       jump: this.jumpQueued,
       place: this.placeQueued,
+      inspectOwner: this.inspectOwnerQueued,
       remove: this.removeQueued,
       removeHeld: this.removeHeld || this.keyboardRemoveHeld,
       rotate: this.rotateQueued,
@@ -158,6 +161,7 @@ export class GameInput {
     this.lookY = 0;
     this.jumpQueued = false;
     this.placeQueued = false;
+    this.inspectOwnerQueued = false;
     this.removeQueued = false;
     this.rotateQueued = false;
     this.manualProductionQueued = false;
@@ -180,6 +184,7 @@ export class GameInput {
     this.lookY = 0;
     this.jumpQueued = false;
     this.placeQueued = false;
+    this.inspectOwnerQueued = false;
     this.removeQueued = false;
     this.removeHeld = false;
     this.keyboardRemoveHeld = false;
@@ -201,6 +206,15 @@ export class GameInput {
         event.isComposing ||
         isInteractiveKeyboardTarget(event.target, this.elements.canvas)
       ) {
+        return;
+      }
+
+      if (
+        event.code === "Escape" &&
+        document.pointerLockElement === this.elements.canvas
+      ) {
+        event.preventDefault();
+        this.release();
         return;
       }
 
@@ -266,13 +280,10 @@ export class GameInput {
       if (event.button === 0) {
         this.placeQueued = true;
       } else if (event.button === 2) {
-        this.removeQueued = true;
-        this.removeHeld = true;
-      }
-    });
-    document.addEventListener("pointerup", (event) => {
-      if (event.button === 2) {
-        this.removeHeld = false;
+        // Desktop secondary click is reserved for the aimed block's public
+        // creator summary. Removal remains an explicit Delete hold so an
+        // information request can never mutate the world by accident.
+        this.inspectOwnerQueued = true;
       }
     });
     this.elements.canvas.addEventListener("contextmenu", (event) =>
