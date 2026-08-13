@@ -6,6 +6,8 @@ import {
   canonicalPlacementNormal,
   configureLumenSurfaceTexture,
   createGuideInstanceBatches,
+  createLumenMoonMaterial,
+  createLumenSkyMaterial,
   createLumenSurfaceAtlasData,
   lumenAtlasTileIndex,
   lumenAtlasUv,
@@ -13,6 +15,27 @@ import {
 } from "../src/rendering/VoxelRenderer";
 
 describe("루멘문 렌더링 비주얼 자원", () => {
+  it("달은 불투명 월드 오브젝트 뒤에서 가려지고 하늘에서는 보인다", () => {
+    const texture = new THREE.Texture();
+    const moon = createLumenMoonMaterial(texture);
+    const sky = createLumenSkyMaterial();
+    const opaqueWorld = new THREE.MeshStandardMaterial();
+
+    expect(opaqueWorld.transparent).toBe(false);
+    expect(opaqueWorld.depthWrite).toBe(true);
+    expect(moon.depthTest).toBe(true);
+    expect(moon.depthWrite).toBe(false);
+    expect(sky.depthTest).toBe(false);
+    expect(sky.depthWrite).toBe(false);
+    expect(moon.transparent).toBe(true);
+    expect(moon.opacity).toBeGreaterThan(0);
+
+    opaqueWorld.dispose();
+    sky.dispose();
+    moon.dispose();
+    texture.dispose();
+  });
+
   it("모바일은 데스크톱보다 낮은 고정 자원 예산을 사용한다", () => {
     const mobile = rendererVisualBudget(true);
     const desktop = rendererVisualBudget(false);

@@ -869,18 +869,7 @@ export class VoxelRenderer {
 
     const moonTexture = createLumenMoonTexture(128);
     this.environmentTextures.push(moonTexture);
-    const moon = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: moonTexture,
-        color: 0xddeaff,
-        transparent: true,
-        opacity: 0.92,
-        depthTest: false,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        fog: false,
-      }),
-    );
+    const moon = new THREE.Sprite(createLumenMoonMaterial(moonTexture));
     moon.position.set(-42, 35, -79);
     moon.scale.set(13.5, 13.5, 1);
     moon.renderOrder = -980;
@@ -1885,7 +1874,22 @@ function createLumenLanternGeometry(): THREE.BufferGeometry {
   );
 }
 
-function createLumenSkyMaterial(): THREE.ShaderMaterial {
+export function createLumenMoonMaterial(
+  map: THREE.Texture,
+): THREE.SpriteMaterial {
+  return new THREE.SpriteMaterial({
+    map,
+    color: 0xddeaff,
+    transparent: true,
+    opacity: 0.92,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+}
+
+export function createLumenSkyMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
