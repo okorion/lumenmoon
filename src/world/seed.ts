@@ -61,6 +61,27 @@ export function createSeedSnapshot(
   now = Date.now(),
   config: Readonly<GameRulesConfig> = DEFAULT_GAME_RULES,
 ): WorldSnapshot {
+  const identity = createIdentitySeedSnapshot(now);
+  const progress = grantInitialInventory(
+    createLocalPlayerProgress(now),
+    config,
+  );
+
+  return {
+    ...identity,
+    localState: {
+      playerId: LOCAL_PLAYER.id,
+      baySlotIndex: 0,
+      progress,
+    },
+    localMissionState: createInitialLocalMissionWorldState(WORLD_ID, now),
+    localFreeModeStates: [],
+    localFreeModeRevision: 0,
+  };
+}
+
+/** 모드 선택 전에는 공개 정체성과 공용 지형만 만들고 두 진행 상태는 만들지 않는다. */
+export function createIdentitySeedSnapshot(now = Date.now()): WorldSnapshot {
   // 로컬과 온라인이 같은 결정적 광장·코어를 사용해야 저장소 모드를 바꿔도
   // 맵의 형태와 충돌 표면이 달라지지 않는다.
   const blocks: VoxelBlock[] = createCentralOnlineSystemBlocks();
@@ -103,22 +124,16 @@ export function createSeedSnapshot(
     }
   }
 
-  const progress = grantInitialInventory(
-    createLocalPlayerProgress(now),
-    config,
-  );
-
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     worldId: WORLD_ID,
     blocks,
     updatedAt: now,
     localState: {
       playerId: LOCAL_PLAYER.id,
       baySlotIndex: 0,
-      progress,
+      progress: createLocalPlayerProgress(now),
     },
-    localMissionState: createInitialLocalMissionWorldState(WORLD_ID, now),
   };
 }
 

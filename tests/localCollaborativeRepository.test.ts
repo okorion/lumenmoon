@@ -26,6 +26,20 @@ class FakeClock implements Clock {
 }
 
 describe("LocalCollaborativeWorldRepository", () => {
+  it("모드 선택 전 정체성 조회는 두 모드 진행 상태를 만들지 않는다", async () => {
+    const storage = new MemoryWorldRepository();
+    const repository = new LocalCollaborativeWorldRepository(storage, {
+      clock: new FakeClock(1_000),
+    });
+
+    const identity = await repository.getPlayerIdentity(WORLD_ID);
+    const snapshot = await storage.load(WORLD_ID);
+
+    expect(identity.player.publicId).toBe(LOCAL_PLAYER.publicId);
+    expect(snapshot?.localState?.progress.inventory).toBe(0);
+    expect(snapshot?.localMissionState).toBeUndefined();
+    expect(snapshot?.localFreeModeStates).toBeUndefined();
+  });
   it("기존 로컬 저장소 위에서 bootstrap과 주변 청크 읽기를 제공한다", async () => {
     const repository = new LocalCollaborativeWorldRepository(
       new MemoryWorldRepository(),

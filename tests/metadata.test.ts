@@ -29,7 +29,7 @@ describe("공개 메타데이터", () => {
     });
   });
 
-  it("PWA manifest가 가로 우선 방향과 실제 설치 이미지를 선언한다", async () => {
+  it("PWA manifest가 보조 기술의 화면 방향과 실제 설치 이미지를 지원한다", async () => {
     const manifest = JSON.parse(
       await readFile(join(ROOT, "public", "manifest.webmanifest"), "utf8"),
     ) as {
@@ -38,7 +38,7 @@ describe("공개 메타데이터", () => {
       screenshots?: Array<{ src: string; form_factor: string }>;
     };
 
-    expect(manifest.orientation).toBe("landscape-primary");
+    expect(manifest.orientation).toBe("any");
     expect(manifest.icons).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ src: "/icons/icon-192.png", sizes: "192x192" }),
@@ -63,6 +63,7 @@ describe("공개 메타데이터", () => {
       "public/og/starlight-gate-complete-v1.jpg",
       "public/screenshots/lumenmoon-desktop.jpg",
       "public/screenshots/lumenmoon-mobile.jpg",
+      "public/screenshots/lumenmoon-sound-settings.png",
       "public/icons/icon-192.png",
       "public/icons/icon-512.png",
       "public/icons/icon-maskable-512.png",

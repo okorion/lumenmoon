@@ -277,6 +277,94 @@ describeIntegration("로컬 Supabase 실제 RPC 계약", () => {
     },
     60_000,
   );
+
+  it(
+    "자유 모드의 30개 지급·좌표 경쟁·소유자 철거·공개 조회를 보장한다",
+    async () => {
+      const url = requiredEnvironment(SUPABASE_URL, "SUPABASE_TEST_URL");
+      const anonKey = requiredEnvironment(
+        SUPABASE_ANON_KEY,
+        "SUPABASE_TEST_ANON_KEY",
+      );
+      const first = createActor(url, anonKey);
+      const second = createActor(url, anonKey);
+      const [firstOverview, secondOverview] = await Promise.all([
+        first.getFreeModeOverview(WORLD_ID),
+        second.getFreeModeOverview(WORLD_ID),
+      ]);
+      expect(firstOverview.progress.inventory).toBe(30);
+      expect(secondOverview.progress.inventory).toBe(30);
+      expect(firstOverview).toMatchObject({
+        maxInventory: 100,
+        grantAmount: 5,
+        grantIntervalMs: 3_600_000,
+        foreignRemovalAgeMs: 259_200_000,
+      });
+
+      // Slot 0의 실제 시스템 바닥 중 공용 스폰·통로 보호 영역 밖 좌표.
+      const position = { x: 2, y: 1, z: -27 };
+      const firstRequest = freePlacementRequest(position);
+      const secondRequest = freePlacementRequest(position);
+      const race = await Promise.allSettled([
+        first.commitFreeModeActions(firstRequest),
+        second.commitFreeModeActions(secondRequest),
+      ]);
+      expect(race.filter(({ status }) => status === "fulfilled")).toHaveLength(1);
+      expect(race.filter(({ status }) => status === "rejected")).toHaveLength(1);
+
+      const winnerIndex = race.findIndex(({ status }) => status === "fulfilled");
+      const winner = winnerIndex === 0 ? first : second;
+      const loser = winnerIndex === 0 ? second : first;
+      const winnerRequest = winnerIndex === 0 ? firstRequest : secondRequest;
+      const winnerResult = race[winnerIndex];
+      if (!winnerResult || winnerResult.status !== "fulfilled") {
+        throw new Error("자유 모드 좌표 경쟁 승자를 찾지 못했습니다.");
+      }
+      const blockId = winnerResult.value.upsertedBlocks[0]!.id;
+      expect(winnerResult.value.progress.inventory).toBe(29);
+      expect(winnerResult.value.upsertedBlocks[0]?.source).toBe("free");
+      expect((await loser.getFreeModeOverview(WORLD_ID)).progress.inventory).toBe(
+        30,
+      );
+
+      const replay = await winner.commitFreeModeActions(winnerRequest);
+      expect(replay.replayed).toBe(true);
+      expect(replay.progress.inventory).toBe(29);
+      await expect(
+        loser.commitFreeModeActions({
+          worldId: WORLD_ID,
+          idempotencyKey: crypto.randomUUID(),
+          actions: [{ type: "remove", blockId }],
+        }),
+      ).rejects.toMatchObject({ code: "P0004" });
+      expect((await loser.getFreeModeOverview(WORLD_ID)).progress.inventory).toBe(
+        30,
+      );
+
+      const visible = await loser.loadNearbyFreeModeBlocks({
+        worldId: WORLD_ID,
+        chunkX: Math.floor(position.x / 16),
+        chunkY: 0,
+        chunkZ: Math.floor(position.z / 16),
+        radius: 0,
+        verticalRadius: 0,
+      });
+      expect(visible.blocks[0]).toMatchObject({ id: blockId, source: "free" });
+      expect(visible.blocks[0]?.owner.id).toBe(
+        visible.blocks[0]?.owner.publicId,
+      );
+      expect(JSON.stringify(visible)).not.toContain("internal-auth-uid");
+
+      const removed = await winner.commitFreeModeActions({
+        worldId: WORLD_ID,
+        idempotencyKey: crypto.randomUUID(),
+        actions: [{ type: "remove", blockId }],
+      });
+      expect(removed.removedBlockIds).toEqual([blockId]);
+      expect(removed.progress.inventory).toBe(30);
+    },
+    60_000,
+  );
 });
 
 function createActor(url: string, anonKey: string): SupabaseRepository {
@@ -327,6 +415,25 @@ function placementRequest(
         position,
         kind: "cube",
         rotation: 0,
+        colorIndex: 2,
+      },
+    ],
+  };
+}
+
+function freePlacementRequest(
+  position: { x: number; y: number; z: number },
+) {
+  return {
+    worldId: WORLD_ID,
+    idempotencyKey: crypto.randomUUID(),
+    actions: [
+      {
+        type: "place" as const,
+        blockId: crypto.randomUUID(),
+        position,
+        kind: "cube" as const,
+        rotation: 0 as const,
         colorIndex: 2,
       },
     ],

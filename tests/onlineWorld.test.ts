@@ -1,14 +1,89 @@
 import { describe, expect, it, vi } from "vitest";
+import { createLocalPlayerProgress } from "../src/domain/progression";
 import {
+  LOCAL_PLAYER,
+  SYSTEM_OWNER,
+  WORLD_ID,
+  type VoxelBlock,
+} from "../src/domain/types";
+import type { FreeModeMutationResult } from "../src/data/CollaborativeWorldRepository";
+import {
+  ChunkRequestGate,
+  ExplicitRetryGate,
   SynchronizedServerClock,
   OnlineProgressGate,
   applyAuthoritativeMutation,
   createOptimisticPlacementProgress,
   createNearbyOnlineSystemBlocks,
   mergeServerAndSystemBlocks,
+  reconcileFreeModeMutationResult,
 } from "../src/app/onlineWorld";
-import { createLocalPlayerProgress } from "../src/domain/progression";
-import { LOCAL_PLAYER, SYSTEM_OWNER, WORLD_ID, type VoxelBlock } from "../src/domain/types";
+
+function freeMutation(replayed: boolean): FreeModeMutationResult {
+  return {
+    worldId: WORLD_ID,
+    idempotencyKey: "operation",
+    upsertedBlocks: [],
+    removedBlockIds: [],
+    progress: {
+      initialGrantClaimed: true,
+      inventory: 29,
+      lastSettledAt: 1,
+    },
+    serverNow: 1,
+    replayed,
+  };
+}
+
+describe("자유 모드 멱등 replay 권위 복구", () => {
+  it("새 응답만 적용하고 replay는 최신 overview와 청크를 다시 읽는다", async () => {
+    const applied: boolean[] = [];
+    let refreshes = 0;
+    const handlers = {
+      apply: (value: FreeModeMutationResult) => {
+        applied.push(value.replayed);
+      },
+      refresh: async () => {
+        refreshes += 1;
+      },
+    };
+
+    await reconcileFreeModeMutationResult(freeMutation(false), handlers);
+    await reconcileFreeModeMutationResult(freeMutation(true), handlers);
+
+    expect(applied).toEqual([false]);
+    expect(refreshes).toBe(1);
+  });
+});
+
+describe("자유 모드 자동 요청 실패 래치", () => {
+  it("명시 재시도 전까지 프레임 반복 요청을 막고 성공 뒤 다시 연다", () => {
+    const gate = new ExplicitRetryGate();
+
+    expect(gate.canAttempt()).toBe(true);
+    gate.recordFailure();
+    expect(Array.from({ length: 120 }, () => gate.canAttempt())).not.toContain(
+      true,
+    );
+    expect(gate.canAttempt(true)).toBe(true);
+    gate.recordSuccess();
+    expect(gate.canAttempt()).toBe(true);
+  });
+
+  it("같은 청크 실패는 매 프레임 반복하지 않고 이동·명시 재시도만 허용한다", () => {
+    const gate = new ChunkRequestGate();
+
+    expect(gate.shouldRequest("free:0:0:-2")).toBe(true);
+    expect(
+      Array.from({ length: 120 }, () =>
+        gate.shouldRequest("free:0:0:-2"),
+      ),
+    ).not.toContain(true);
+    expect(gate.shouldRequest("free:1:0:-2")).toBe(true);
+    gate.reset();
+    expect(gate.shouldRequest("free:1:0:-2")).toBe(true);
+  });
+});
 
 function block(id: string, x: number, owner = LOCAL_PLAYER): VoxelBlock {
   return {

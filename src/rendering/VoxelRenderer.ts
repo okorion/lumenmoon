@@ -286,6 +286,9 @@ export class VoxelRenderer {
   private lastRenderAt = 0;
   private smoothedFramesPerSecond = 0;
   private isDisposed = false;
+  private readonly reduceMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -608,7 +611,7 @@ export class VoxelRenderer {
     onComplete?: () => void,
   ): boolean {
     this.skipMissionCompletionCinematic();
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    if (this.reduceMotion) {
       onComplete?.();
       return false;
     }
@@ -866,18 +869,7 @@ export class VoxelRenderer {
 
     const moonTexture = createLumenMoonTexture(128);
     this.environmentTextures.push(moonTexture);
-    const moon = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: moonTexture,
-        color: 0xddeaff,
-        transparent: true,
-        opacity: 0.92,
-        depthTest: false,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        fog: false,
-      }),
-    );
+    const moon = new THREE.Sprite(createLumenMoonMaterial(moonTexture));
     moon.position.set(-42, 35, -79);
     moon.scale.set(13.5, 13.5, 1);
     moon.renderOrder = -980;
@@ -1129,17 +1121,22 @@ export class VoxelRenderer {
   }
 
   private updateMissionAnimation(now: number): void {
-    const pulse = 0.78 + Math.sin(now * 0.004) * 0.18;
+    const animated = !this.reduceMotion;
+    const pulse = animated ? 0.78 + Math.sin(now * 0.004) * 0.18 : 0.9;
     this.missionEffectRoot.traverse((child) => {
       if (child.userData["missionPulse"] && child instanceof THREE.Mesh) {
-        child.scale.setScalar(1 + Math.sin(now * 0.003) * 0.025);
+        child.scale.setScalar(animated ? 1 + Math.sin(now * 0.003) * 0.025 : 1);
         const material = child.material;
         if (material instanceof THREE.MeshStandardMaterial) {
           material.emissiveIntensity =
             (this.missionStage === 100 ? 2.25 : 1.35) * pulse;
         }
       }
-      if (child.userData["missionParticles"] && child instanceof THREE.Points) {
+      if (
+        animated &&
+        child.userData["missionParticles"] &&
+        child instanceof THREE.Points
+      ) {
         child.rotation.y = now * 0.00008;
       }
       if (child.userData["missionBeam"] && child instanceof THREE.Mesh) {
@@ -1877,7 +1874,22 @@ function createLumenLanternGeometry(): THREE.BufferGeometry {
   );
 }
 
-function createLumenSkyMaterial(): THREE.ShaderMaterial {
+export function createLumenMoonMaterial(
+  map: THREE.Texture,
+): THREE.SpriteMaterial {
+  return new THREE.SpriteMaterial({
+    map,
+    color: 0xddeaff,
+    transparent: true,
+    opacity: 0.92,
+    depthTest: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+  });
+}
+
+export function createLumenSkyMaterial(): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,

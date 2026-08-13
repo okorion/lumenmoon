@@ -45,7 +45,7 @@ body,
   overflow: hidden;
   overflow: clip;
   overscroll-behavior: none;
-  touch-action: none;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 html,
@@ -80,12 +80,17 @@ button:focus-visible {
   outline-offset: 3px;
 }
 
+input[type="range"]:focus-visible,
+#game-canvas:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 3px;
+}
+
 .game-shell,
 #game-canvas {
   position: relative;
   width: 100%;
   height: 100%;
-  touch-action: none;
 }
 
 .game-shell {
@@ -95,6 +100,7 @@ button:focus-visible {
   overflow: hidden;
   overflow: clip;
   contain: strict;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 #game-canvas {
@@ -814,6 +820,90 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.owner-notice {
+  position: absolute;
+  z-index: 24;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border: 1px solid rgba(164, 225, 255, 0.2);
+  border-radius: 14px;
+  color: rgba(245, 250, 255, 0.92);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(0.97);
+  white-space: nowrap;
+}
+
+.owner-notice[hidden] {
+  display: none;
+}
+
+.owner-notice span,
+.owner-notice time {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.owner-notice strong {
+  font-size: 13px;
+}
+
+.owner-notice.is-showing {
+  animation: owner-notice-fade 1.8s ease both;
+}
+
+.game-shell:has(.owner-notice.is-showing) .action-hint {
+  opacity: 0;
+}
+
+@keyframes owner-notice-fade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.97);
+  }
+
+  14%,
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -54%) scale(0.99);
+  }
+}
+
+@media (pointer: fine) and (min-width: 761px) {
+  .game-shell.is-pointer-locked :is(
+    button,
+    input,
+    select,
+    textarea,
+    [role="button"]
+  ) {
+    pointer-events: none !important;
+  }
+
+  .game-shell:has(.world-panel.is-expanded) .mission-panel {
+    visibility: hidden;
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .owner-notice.is-showing {
+    animation: none;
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
 .removal-hold {
   position: absolute;
   z-index: 10;
@@ -946,7 +1036,8 @@ button:focus-visible {
 
 .recovery-notice {
   position: absolute;
-  z-index: 72;
+  /* 모드 최초 진입 실패도 start overlay 뒤에 가려지지 않아야 한다. */
+  z-index: 82;
   top: calc(max(10px, env(safe-area-inset-top)) + 58px);
   left: 50%;
   display: flex;
@@ -1045,7 +1136,10 @@ button:focus-visible {
   border-radius: 13px;
   color: var(--ink);
   font-size: 12px;
+  overflow-wrap: break-word;
+  text-align: center;
   transform: translateX(-50%);
+  word-break: keep-all;
   animation: toast-in 180ms ease-out;
 }
 
@@ -1066,6 +1160,7 @@ button:focus-visible {
   transition:
     opacity 220ms ease,
     visibility 220ms ease;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 
 .mission-archive-overlay {
@@ -1076,7 +1171,7 @@ button:focus-visible {
     radial-gradient(circle at 50% 20%, rgba(103, 201, 179, 0.13), transparent 34%),
     rgba(5, 9, 17, 0.88);
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .analytics-settings-overlay {
@@ -1086,7 +1181,7 @@ button:focus-visible {
     radial-gradient(circle at 50% 16%, rgba(120, 240, 198, 0.12), transparent 34%),
     rgba(5, 9, 17, 0.9);
   pointer-events: auto;
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 
 .analytics-settings-shell {
@@ -1139,12 +1234,101 @@ button:focus-visible {
   -webkit-user-select: text;
 }
 
+.sound-settings-section,
 .analytics-consent-section,
 .analytics-privacy-notice {
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 18px;
   background: rgba(255, 255, 255, 0.045);
+}
+
+.sound-settings-section {
+  margin-bottom: 12px;
+}
+
+.sound-settings-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sound-settings-heading h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.sound-settings-heading p {
+  margin: 7px 0 0;
+  color: var(--mint);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.sound-settings-heading p[data-enabled="false"] {
+  color: var(--muted);
+}
+
+.sound-toggle-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.sound-toggle-actions .ui-button {
+  min-width: 78px;
+  min-height: 44px;
+}
+
+.sound-levels {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+
+.sound-level {
+  display: grid;
+  min-width: 0;
+  min-height: 44px;
+  grid-template-columns: 86px minmax(90px, 1fr) 40px;
+  align-items: center;
+  gap: 10px;
+}
+
+.sound-level label {
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.sound-level input[type="range"] {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--mint);
+  cursor: pointer;
+  touch-action: pan-x;
+}
+
+.sound-level output {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.sound-settings-section.is-muted .sound-level {
+  color: var(--muted);
+}
+
+.sound-settings-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+  line-height: 1.5;
 }
 
 .analytics-consent-heading h3,
@@ -1523,7 +1707,7 @@ button:focus-visible {
 .start-card > small {
   display: block;
   margin-top: 15px;
-  color: rgba(231, 242, 255, 0.45);
+  color: rgba(231, 242, 255, 0.72);
   font-size: 9px;
 }
 
@@ -1810,9 +1994,25 @@ button:focus-visible {
     padding-top: 12px;
   }
 
+  .sound-settings-section,
   .analytics-consent-section,
   .analytics-privacy-notice {
     padding: 13px;
+  }
+
+  .sound-settings-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .sound-toggle-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sound-level {
+    grid-template-columns: 78px minmax(72px, 1fr) 38px;
+    gap: 7px;
   }
 
   .analytics-consent-choices {
@@ -2190,6 +2390,73 @@ button:focus-visible {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --ink: CanvasText;
+    --muted: CanvasText;
+    --mint: Highlight;
+    --line: CanvasText;
+  }
+
+  .glass,
+  .start-overlay,
+  .fatal-overlay,
+  .mission-archive-overlay,
+  .analytics-settings-overlay,
+  .start-card,
+  .fatal-card,
+  .mission-archive-shell,
+  .analytics-settings-shell,
+  .sound-settings-section,
+  .analytics-consent-section,
+  .analytics-privacy-notice {
+    border-color: CanvasText !important;
+    color: CanvasText !important;
+    background: Canvas !important;
+    box-shadow: none !important;
+  }
+
+  button,
+  input,
+  .game-mode-choice,
+  .analytics-consent-choice {
+    border: 1px solid ButtonText !important;
+    color: ButtonText !important;
+    background: ButtonFace !important;
+    box-shadow: none !important;
+  }
+
+  button:focus-visible,
+  input:focus-visible,
+  .game-mode-choice:has(input:focus-visible) {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px;
+  }
+
+  .ui-button.is-selected,
+  .game-mode-choice:has(input:checked),
+  .analytics-consent-choice:has(input:checked) {
+    outline: 2px solid Highlight;
+    outline-offset: -3px;
+  }
+
+  .mission-progress,
+  .removal-hold {
+    border: 1px solid CanvasText;
+  }
+
+  .mission-progress i,
+  .removal-hold i {
+    background: Highlight !important;
+  }
+
+  .palette-toggle i,
+  .color-button::after {
+    forced-color-adjust: none;
+    border: 2px solid CanvasText;
   }
 }
 
@@ -4338,5 +4605,809 @@ button.ui-button:not(:disabled):active {
 
   .build-tray .palette-row {
     grid-template-columns: repeat(6, 44px);
+  }
+}
+
+/* Game mode choice and free-building HUD -------------------------------- */
+.game-shell:not(.is-world-entered) .profile-status-panel,
+.game-shell:not(.is-world-entered) .floating-settings,
+.game-shell:not(.is-world-entered) .mission-panel,
+.game-shell:not(.is-world-entered) .owner-tooltip,
+.game-shell:not(.is-world-entered) .build-tray,
+.game-shell:not(.is-world-entered) .mobile-controls,
+.game-shell:not(.is-world-entered) .performance-hud {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.game-shell:not(.is-world-entered) .profile-status-panel > .brand-panel {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.game-mode-picker {
+  display: grid;
+  width: 100%;
+  max-width: 480px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 auto 14px;
+  padding: 0;
+  border: 0;
+}
+
+.game-mode-choice {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 82px;
+  align-items: stretch;
+  border: 1px solid rgba(219, 237, 255, 0.14);
+  border-radius: 15px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.045);
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.game-mode-choice > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.game-mode-choice > span {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: inherit;
+}
+
+.game-mode-choice strong {
+  color: #f7fbff;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.game-mode-choice small,
+.game-mode-choice em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.game-mode-choice em {
+  color: rgba(169, 230, 210, 0.78);
+  font-size: 8px;
+}
+
+.game-mode-choice:has(input:checked) {
+  border-color: rgba(120, 240, 198, 0.68);
+  background: linear-gradient(
+    145deg,
+    rgba(120, 240, 198, 0.16),
+    rgba(139, 181, 255, 0.08)
+  );
+  box-shadow: inset 0 0 0 1px rgba(120, 240, 198, 0.08);
+}
+
+.game-mode-choice:has(input:focus-visible) {
+  outline: 2px solid #d7e7a1;
+  outline-offset: 2px;
+}
+
+.game-mode-picker:disabled .game-mode-choice {
+  opacity: 0.52;
+  cursor: wait;
+}
+
+.free-mode-details:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.free-mode-details > span {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 1px solid rgba(219, 237, 255, 0.09);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.free-mode-details small {
+  color: var(--muted);
+  font-size: 8px;
+}
+
+.free-mode-details strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mint);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-shell[data-game-mode="free"] .mission-panel,
+.game-shell[data-game-mode="free"] .mission-archive-overlay,
+.game-shell[data-game-mode="free"] .world-status-row,
+.game-shell[data-game-mode="free"] .progress-grid,
+.game-shell[data-game-mode="free"] .production-status,
+.game-shell[data-game-mode="free"] .hud-actions,
+.game-shell[data-game-mode="free"] .manual-stage,
+.game-shell[data-game-mode="free"] .shortcut-guide {
+  display: none !important;
+}
+
+.game-shell[data-game-mode="free"]
+  .world-panel:not(.is-expanded)
+  .free-mode-details {
+  display: none;
+}
+
+.game-shell[data-game-mode="mission"] .free-mode-details {
+  display: none !important;
+}
+
+@media (pointer: coarse), (max-width: 760px) {
+  .start-overlay {
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .start-card {
+    max-height: calc(
+      100dvh - max(8px, env(safe-area-inset-top)) -
+        max(8px, env(safe-area-inset-bottom))
+    );
+    overflow: hidden;
+  }
+
+  .game-mode-choice {
+    min-height: 72px;
+  }
+
+  .game-mode-choice > span {
+    padding: 8px 10px;
+  }
+
+  .game-shell[data-game-mode="free"] .world-panel.is-expanded {
+    max-height: calc(100dvh - 16px);
+    overflow: hidden;
+    touch-action: none;
+  }
+}
+
+@media (max-width: 300px) {
+  .start-overlay,
+  .analytics-settings-overlay,
+  .mission-archive-overlay,
+  .fatal-overlay {
+    place-items: start center;
+    padding: max(6px, env(safe-area-inset-top))
+      max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom))
+      max(6px, env(safe-area-inset-left));
+    overflow: hidden auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y pinch-zoom;
+  }
+
+  .start-card {
+    max-height: none;
+    padding: 18px 12px;
+    overflow: visible;
+  }
+
+  .start-card h1 {
+    margin-block: 10px 8px;
+    font-size: 28px;
+  }
+
+  .game-mode-picker,
+  .free-mode-details {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .analytics-settings-shell,
+  .mission-archive-shell,
+  .fatal-card {
+    width: 100%;
+    max-height: none;
+    padding: 12px;
+    overflow: visible;
+  }
+
+  .analytics-settings-shell > header,
+  .mission-archive-shell > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .analytics-settings-shell > header > button,
+  .mission-archive-shell > header > button {
+    width: 100%;
+  }
+
+  .analytics-settings-content,
+  .mission-archive-content {
+    overflow: visible;
+  }
+
+  .sound-settings-section,
+  .analytics-consent-section,
+  .analytics-privacy-notice {
+    padding: 10px;
+  }
+
+  .sound-toggle-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sound-toggle-actions .ui-button {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sound-level {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 2px 8px;
+    padding-block: 3px;
+  }
+
+  .sound-level label {
+    grid-column: 1 / -1;
+  }
+
+  .sound-level input[type="range"] {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 480px) and (orientation: portrait) {
+  .game-mode-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .game-mode-choice {
+    min-height: 62px;
+  }
+
+  .game-mode-choice > span {
+    gap: 2px;
+    padding: 7px 10px;
+  }
+
+  .start-card #start-button.ui-button {
+    width: 100%;
+  }
+}
+
+@media (max-height: 520px) {
+  .game-mode-picker {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 8px;
+  }
+
+  .game-mode-choice {
+    min-height: 64px;
+  }
+
+  .game-mode-choice em,
+  .start-card > small {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) and (max-height: 560px) and (orientation: portrait) {
+  .start-card .eyebrow,
+  .start-card > small {
+    display: none;
+  }
+
+  .start-card h1 {
+    margin: 4px 0 6px;
+    font-size: 24px;
+  }
+
+  .start-card p {
+    margin-bottom: 7px;
+    line-height: 1.35;
+  }
+
+  .game-mode-picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .game-mode-choice {
+    min-height: 56px;
+  }
+}
+
+/* Desktop HUD readability -------------------------------------------------
+   Fine-pointer layouts have enough room to use a more legible type and
+   control scale. Keep this final and desktop-only so compact mobile HUD
+   rules retain their exact sizing. */
+@media (hover: hover) and (pointer: fine) and (min-width: 1024px) {
+  :root {
+    --control-height: 40px;
+    --control-height-compact: 36px;
+    --control-radius: 12px;
+    --control-padding-x: 14px;
+    --control-gap: 8px;
+  }
+
+  .game-shell {
+    --desktop-hud-title: 16px;
+    --desktop-hud-body: 12px;
+    --desktop-hud-small: 10px;
+  }
+
+  button.ui-button {
+    font-size: 11px;
+  }
+
+  button.ui-button.ui-button--compact {
+    padding-inline: 11px;
+    font-size: 10px;
+  }
+
+  .profile-status-panel.world-panel {
+    max-width: min(680px, calc(100vw - 104px));
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .profile-status-panel > .brand-panel {
+    min-width: 218px;
+    gap: 10px;
+  }
+
+  .profile-crest {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+    border-radius: 13px;
+  }
+
+  .profile-crest .creator-crest {
+    width: 35px;
+    height: 35px;
+  }
+
+  .profile-copy strong {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .profile-copy small {
+    gap: 7px;
+    margin-top: 4px;
+    font-size: var(--desktop-hud-small);
+    line-height: 1.2;
+  }
+
+  .world-panel-toggle {
+    --button-icon-size: 42px;
+  }
+
+  .world-panel-toggle .ui-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .world-panel-toggle kbd,
+  .tool-button kbd {
+    top: 3px;
+    right: 4px;
+    font-size: 8px;
+  }
+
+  .world-panel.is-expanded {
+    width: min(360px, calc(100vw - 36px));
+    gap: 10px;
+    padding: 14px;
+  }
+
+  .world-panel.is-expanded .world-status-row,
+  .world-panel.is-expanded .production-status {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.35;
+  }
+
+  .world-panel.is-expanded .progress-grid > span {
+    min-height: 44px;
+    gap: 2px;
+    padding: 6px;
+  }
+
+  .world-panel .progress-grid strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .world-panel.is-expanded .progress-grid small,
+  .manual-stage {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .shortcut-guide {
+    gap: 6px;
+    padding-top: 9px;
+  }
+
+  .shortcut-guide > div {
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .shortcut-guide dt,
+  .shortcut-guide dd {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.45;
+  }
+
+  .free-mode-details > span {
+    min-height: 54px;
+    padding: 8px 10px;
+  }
+
+  .free-mode-details small {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .free-mode-details strong {
+    font-size: 14px;
+  }
+
+  .mission-panel {
+    top: 92px;
+    width: min(326px, calc(100vw - 36px));
+    max-height: calc(100dvh - 188px);
+    padding: 15px;
+  }
+
+  .mission-panel.is-collapsed {
+    width: min(296px, calc(100vw - 36px));
+    padding: 12px 13px;
+  }
+
+  .mission-heading small,
+  .mission-choice > small,
+  .mission-recent > small,
+  .contributor-lights-heading small {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.3;
+  }
+
+  .mission-heading strong {
+    margin-top: 3px;
+    font-size: var(--desktop-hud-title);
+    line-height: 1.25;
+  }
+
+  .mission-stage {
+    padding: 6px 9px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .mission-stage .ui-icon {
+    width: 15px;
+    height: 15px;
+  }
+
+  .mission-panel-toggle {
+    --button-icon-size: 38px;
+  }
+
+  .mission-progress {
+    height: 7px;
+    margin-top: 12px;
+  }
+
+  .mission-progress-copy {
+    margin-top: 7px;
+  }
+
+  .mission-progress-copy strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .mission-progress-copy span,
+  .mission-stats small,
+  .mission-stats strong,
+  .mission-recent-list,
+  .mission-recent-item strong,
+  .mission-recent-item small,
+  .mission-slot-choices button,
+  .contributor-light-identity strong,
+  .contributor-light-identity small {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .mission-stats > span {
+    min-height: 38px;
+    padding: 8px 9px;
+  }
+
+  .mission-recent-item {
+    gap: 6px;
+    padding: 6px;
+  }
+
+  .mission-recent-item > i {
+    flex-basis: 28px;
+    height: 28px;
+  }
+
+  .mission-slot-choices button {
+    min-height: 34px;
+    padding: 5px 7px;
+  }
+
+  .mission-palette-choices button.ui-button--icon {
+    --button-icon-size: 34px;
+  }
+
+  .mission-contribute-button {
+    min-height: 42px;
+    font-size: 11px;
+  }
+
+  .mission-panel-actions button {
+    min-height: 36px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .contributor-lights-heading strong {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .contributor-light {
+    width: 136px;
+    min-width: 136px;
+    height: 50px;
+    gap: 8px;
+    padding: 6px 8px;
+  }
+
+  .owner-tooltip {
+    top: calc(50% + 32px);
+    width: min(420px, calc(100vw - 48px));
+    min-height: 50px;
+    grid-template-columns: 34px minmax(0, 1fr) auto auto;
+    gap: 10px;
+    padding: 5px 5px 5px 13px;
+  }
+
+  .owner-notice {
+    min-height: 48px;
+    gap: 8px;
+    padding: 10px 16px;
+  }
+
+  .owner-notice span,
+  .owner-notice time {
+    font-size: 11px;
+  }
+
+  .owner-notice strong {
+    font-size: 14px;
+  }
+
+  .owner-tooltip-crest,
+  .owner-tooltip-crest .creator-crest {
+    width: 32px;
+    height: 32px;
+  }
+
+  .owner-tooltip strong {
+    font-size: 13px;
+  }
+
+  .owner-tooltip time {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .owner-tooltip kbd {
+    font-size: 9px;
+  }
+
+  .owner-card {
+    top: 218px;
+    width: min(292px, calc(100vw - 36px));
+    gap: 14px;
+    padding: 15px;
+  }
+
+  .owner-card.is-expanded {
+    grid-template-columns: 46px minmax(0, 1fr) 40px;
+  }
+
+  .owner-emblem {
+    flex-basis: 46px;
+    height: 46px;
+  }
+
+  .owner-emblem .creator-crest {
+    width: 36px;
+    height: 36px;
+  }
+
+  .owner-copy small,
+  .owner-copy span,
+  #owner-id {
+    font-size: var(--desktop-hud-small);
+    line-height: 1.35;
+  }
+
+  .owner-copy strong {
+    margin-block: 4px 2px;
+    font-size: var(--desktop-hud-title);
+  }
+
+  .owner-actions {
+    gap: 7px;
+    margin-top: 10px;
+  }
+
+  .owner-actions button {
+    min-height: 36px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .owner-card.is-expanded .owner-card-toggle.ui-button--icon {
+    --button-icon-size: 40px;
+  }
+
+  .build-tray {
+    bottom: max(22px, env(safe-area-inset-bottom));
+    grid-template-columns: auto 44px auto;
+    gap: 9px;
+    padding: 9px;
+    border-radius: 18px;
+  }
+
+  .tool-button,
+  .palette-toggle {
+    --button-icon-size: 44px;
+  }
+
+  .tool-button .ui-icon {
+    width: 25px;
+    height: 25px;
+  }
+
+  .palette-toggle i {
+    width: 23px;
+    height: 23px;
+  }
+
+  .build-tray .palette-row {
+    bottom: calc(100% + 9px);
+    grid-template-columns: repeat(12, 28px);
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .palette-row button.ui-button--icon {
+    --button-icon-size: 28px;
+  }
+
+  .palette-heading {
+    font-size: var(--desktop-hud-small);
+  }
+
+  .block-stack {
+    min-width: 56px;
+    height: 44px;
+    gap: 7px;
+    padding-inline: 10px;
+  }
+
+  .block-stack .ui-icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .block-stack strong {
+    font-size: 14px;
+  }
+
+  .action-hint {
+    top: calc(50% + 28px);
+    padding: 8px 13px;
+    font-size: 11px;
+  }
+
+  .removal-hold {
+    top: calc(50% + 64px);
+    width: 188px;
+    padding: 8px 9px 11px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .pointer-resume,
+  .cinematic-skip,
+  .highlight-banner {
+    font-size: 11px;
+  }
+
+  .highlight-banner {
+    min-height: 48px;
+    padding: 8px 9px 8px 14px;
+  }
+
+  .highlight-banner button {
+    min-height: 34px;
+    font-size: var(--desktop-hud-small);
+  }
+
+  .floating-settings.analytics-settings-button {
+    --button-icon-size: 48px;
+  }
+
+  .analytics-settings-button .ui-icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .analytics-settings-shell {
+    width: min(720px, 100%);
+  }
+
+  .analytics-settings-shell header p {
+    font-size: 13px;
+  }
+
+  .sound-settings-heading h3,
+  .analytics-consent-heading h3,
+  .analytics-privacy-notice h3 {
+    font-size: 17px;
+  }
+
+  .sound-settings-heading p,
+  .analytics-consent-heading p {
+    font-size: 11px;
+  }
+
+  .sound-level {
+    grid-template-columns: 100px minmax(120px, 1fr) 46px;
+    gap: 12px;
+  }
+
+  .sound-level label {
+    font-size: var(--desktop-hud-body);
+  }
+
+  .sound-level output,
+  .sound-settings-note,
+  .analytics-consent-choice small,
+  .analytics-privacy-notice dt,
+  .analytics-privacy-notice dd,
+  .analytics-privacy-notice p {
+    font-size: 11px;
+  }
+
+  .analytics-consent-choice strong {
+    font-size: 13px;
   }
 }

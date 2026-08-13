@@ -1,6 +1,8 @@
 import {
+  FREE_MODE_ACTIONS_PER_COMMIT,
   MAX_WORLD_ACTION_PAYLOAD_BYTES,
   MAX_WORLD_ACTIONS_PER_COMMIT,
+  type CommitFreeModeActionsRequest,
   type CommitWorldActionsRequest,
   type PlaceWorldAction,
 } from "./CollaborativeWorldRepository";
@@ -37,6 +39,7 @@ export function validateCommitWorldActions(
 
   const placedPositions = new Set<string>();
   const placedById = new Map<string, PlaceWorldAction>();
+  const actionBlockIds = new Set<string>();
   let resetCount = 0;
   for (const action of request.actions) {
     if (action.type === "reset_onboarding") {
@@ -48,6 +51,12 @@ export function validateCommitWorldActions(
     }
 
     assertUuid(action.blockId, "블록 ID");
+    if (actionBlockIds.has(action.blockId)) {
+      throw new RangeError(
+        "한 커밋 안에서 같은 블록 ID를 두 번 작업할 수 없습니다.",
+      );
+    }
+    actionBlockIds.add(action.blockId);
     if (action.type === "remove") {
       continue;
     }
@@ -90,10 +99,17 @@ export function validateCommitWorldActions(
       throw new RangeError("한 커밋 안에서 배치 좌표가 중복되었습니다.");
     }
     placedPositions.add(positionKey);
-    if (placedById.has(action.blockId)) {
-      throw new RangeError("한 커밋 안에서 블록 ID가 중복되었습니다.");
-    }
     placedById.set(action.blockId, action);
+  }
+}
+
+/** 자유 건축은 UI와 RPC 모두 한 번에 블록 하나만 확정한다. */
+export function validateCommitFreeModeActions(
+  request: CommitFreeModeActionsRequest,
+): void {
+  validateCommitWorldActions(request);
+  if (request.actions.length !== FREE_MODE_ACTIONS_PER_COMMIT) {
+    throw new RangeError("자유 건축 작업은 한 번에 하나씩 보내야 합니다.");
   }
 }
 

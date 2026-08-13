@@ -40,6 +40,11 @@ interface Actor {
   session: Session;
 }
 
+interface IdentityActor {
+  repository: SupabaseRepository;
+  session: Session;
+}
+
 test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test.skip(
     !SUPABASE_ANON_KEY,
@@ -49,6 +54,10 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
   test("A 온보딩부터 B의 제작자 확인, 재접속, 다음 미션까지 이어진다", async ({
     browser,
   }) => {
+    // Linux software WebGL에서 모바일 행렬·데스크톱·context loss·마지막 슬롯
+    // 경쟁·기록관·재접속을 모두 검증하면 10분을 넘는다. 개별 UI action은
+    // 15초로 유지하고 전체 시나리오 수명만 충분히 확보한다.
+    test.setTimeout(900_000);
     await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
     await waitForSupabaseReady(requiredAnonKey());
 
@@ -119,8 +128,9 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
     await aContext.close();
 
     const bContext = await createMobileContext(browser, actorB.session);
-    const bPage = await bContext.newPage();
-    const bErrors = observePageErrors(bPage);
+    let bPage = await bContext.newPage();
+    const bErrors: string[] = [];
+    observePageErrors(bPage, bErrors);
     await openPlayableWorld(bPage);
     await expectOnboardingHud(bPage, 2);
     await assertProfileStatusComposition(bPage, actorB.bootstrap);
@@ -138,99 +148,114 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-844x390.png"),
       fullPage: true,
     });
-    await verifyCreatorDiscovery(bPage, actorA.bootstrap);
-    await assertMobileLayout(bPage);
-    await bPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-844x390.png"),
-      fullPage: true,
-    });
 
-    const bStorageState = await bContext.storageState();
-    const portraitContext = await browser.newContext({
-      viewport: { width: 390, height: 844 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const portraitPage = await portraitContext.newPage();
-    const portraitErrors = observePageErrors(portraitPage);
-    await openPlayableWorld(portraitPage);
-    await expectOnboardingHud(portraitPage, 2);
-    await assertProfileStatusComposition(portraitPage, actorB.bootstrap);
-    await assertMinimalMobileHud(portraitPage);
-    await assertMobileLayout(portraitPage);
-    await hideDevelopmentPerformanceHud(portraitPage);
+    // 같은 모바일 문서를 회전·축소하며 검사한다. 각 크기마다 WebGL 월드를
+    // 다시 부팅하면 저성능 CI에서 레이아웃 검증보다 초기화 비용이 커진다.
+    await setMobileViewport(bPage, 390, 844);
+    await expectOnboardingHud(bPage, 2);
+    await assertProfileStatusComposition(bPage, actorB.bootstrap);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await hideDevelopmentPerformanceHud(bPage);
     await exerciseWorldPanelDisclosure(
-      portraitPage,
+      bPage,
       "profile-expanded-mobile-390x844.png",
     );
-    await exercisePaletteDisclosure(portraitPage);
-    await exerciseMissionPanelDisclosure(portraitPage);
-    await portraitPage.screenshot({
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
+    await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "minimal-hud-mobile-390x844.png"),
       fullPage: true,
     });
-    await verifyCreatorDiscovery(portraitPage, actorA.bootstrap);
-    await assertMobileLayout(portraitPage);
-    await portraitPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-390x844.png"),
-      fullPage: true,
-    });
-    await portraitContext.close();
 
-    const shortPortraitContext = await browser.newContext({
-      viewport: { width: 390, height: 667 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const shortPortraitPage = await shortPortraitContext.newPage();
-    const shortPortraitErrors = observePageErrors(shortPortraitPage);
-    await openPlayableWorld(shortPortraitPage);
-    await expectOnboardingHud(shortPortraitPage, 2);
-    await assertMinimalMobileHud(shortPortraitPage);
-    await assertMobileLayout(shortPortraitPage);
-    await exerciseWorldPanelDisclosure(shortPortraitPage);
-    await exercisePaletteDisclosure(shortPortraitPage);
-    await exerciseMissionPanelDisclosure(shortPortraitPage);
-    await verifyCreatorDiscovery(shortPortraitPage, actorA.bootstrap);
-    await assertMobileLayout(shortPortraitPage);
-    await shortPortraitContext.close();
+    await setMobileViewport(bPage, 390, 667);
+    await expectOnboardingHud(bPage, 2);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await exerciseWorldPanelDisclosure(bPage);
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
 
-    const compactPortraitContext = await browser.newContext({
-      viewport: { width: 360, height: 640 },
-      isMobile: true,
-      hasTouch: true,
-      deviceScaleFactor: 2,
-      storageState: bStorageState,
-    });
-    const compactPortraitPage = await compactPortraitContext.newPage();
-    const compactPortraitErrors = observePageErrors(compactPortraitPage);
-    await openPlayableWorld(compactPortraitPage);
-    await expectOnboardingHud(compactPortraitPage, 2);
-    await assertMinimalMobileHud(compactPortraitPage);
-    await assertMobileLayout(compactPortraitPage);
-    await exerciseWorldPanelDisclosure(compactPortraitPage);
-    await exercisePaletteDisclosure(compactPortraitPage);
-    await exerciseMissionPanelDisclosure(compactPortraitPage);
-    await verifyCreatorDiscovery(compactPortraitPage, actorA.bootstrap);
-    await assertMobileLayout(compactPortraitPage);
-    await hideDevelopmentPerformanceHud(compactPortraitPage);
-    await compactPortraitPage.screenshot({
-      path: resolve(SCREENSHOT_DIRECTORY, "shared-world-mobile-360x640.png"),
-      fullPage: true,
-    });
-    await compactPortraitContext.close();
+    await setMobileViewport(bPage, 360, 640);
+    await expectOnboardingHud(bPage, 2);
+    await assertMinimalMobileHud(bPage);
+    await assertMobileLayout(bPage);
+    await exerciseWorldPanelDisclosure(bPage);
+    await exercisePaletteDisclosure(bPage);
+    await exerciseMissionPanelDisclosure(bPage);
+    // 각 크기의 중립 HUD 캡처를 먼저 고정한 뒤 제작자 상세을 검증한다.
+    // 작은 화면부터 가로로 돌아오므로 다음 기록관 흐름도 844×390을 유지한다.
+    for (const [width, height] of [
+      [360, 640],
+      [390, 667],
+      [390, 844],
+      [844, 390],
+    ] as const) {
+      await setMobileViewport(bPage, width, height);
+      await verifyCreatorDiscovery(bPage, actorA.bootstrap);
+      await assertMobileLayout(bPage);
+      const screenshotName =
+        width === 360
+          ? "shared-world-mobile-360x640.png"
+          : height === 844
+            ? "shared-world-mobile-390x844.png"
+            : width === 844
+              ? "shared-world-mobile-844x390.png"
+              : null;
+      if (screenshotName) {
+        await hideDevelopmentPerformanceHud(bPage);
+        await bPage.screenshot({
+          path: resolve(SCREENSHOT_DIRECTORY, screenshotName),
+          fullPage: true,
+        });
+      }
+    }
+
+    const bStorageState = await bContext.storageState();
+    // 동일 이용자의 모바일 월드가 계속 frame/동기화를 수행한 채 데스크톱
+    // 컨텍스트를 부팅하면 저성능 CI에서 시작 RPC가 불필요하게 경합한다.
+    // 저장 상태는 context에 남기고 page만 닫아 데스크톱 흐름을 독립시킨다.
+    await bPage.close();
 
     const desktopContext = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       storageState: bStorageState,
     });
+    configureContextTimeouts(desktopContext);
     const desktopPage = await desktopContext.newPage();
     const desktopErrors = observePageErrors(desktopPage);
     await openPlayableWorld(desktopPage);
+    await desktopPage.keyboard.press("KeyM");
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await desktopPage.keyboard.press("Escape");
+    await expect
+      .poll(() =>
+        desktopPage.evaluate(() => document.pointerLockElement === null),
+      )
+      .toBe(true);
+    // pointerlockchange가 UI 상태에 반영된 뒤에만 단축키를 검증한다. 브라우저의
+    // 실제 lock 해제와 GameUI 이벤트 사이에는 한 프레임 정도 차이가 날 수 있다.
+    await expect(desktopPage.locator("#pointer-resume-button")).toBeVisible();
+    await desktopPage.keyboard.press("KeyM");
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await desktopPage.locator("#world-panel-toggle").click();
+    await expect(desktopPage.locator("#world-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    await expect(desktopPage.locator("#mission-panel-toggle")).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await expect(desktopPage.locator("#mission-panel")).toBeHidden();
+    await desktopPage.locator("#world-panel-toggle").click();
+    await expect(desktopPage.locator("#mission-panel")).toBeVisible();
     await ensureMissionPanelExpanded(desktopPage);
     const desktopLight = desktopPage.locator(
       `[data-contributor-id="${actorA.bootstrap.player.publicId}"]`,
@@ -329,8 +354,9 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       archive.missions.filter(({ id }) => id === missionAfterA.id),
     ).toHaveLength(1);
 
-    await bPage.reload({ waitUntil: "domcontentloaded" });
-    await openPlayableWorld(bPage, false);
+    bPage = await bContext.newPage();
+    observePageErrors(bPage, bErrors);
+    await openPlayableWorld(bPage);
     await ensureMissionPanelExpanded(bPage);
     await bPage.locator("#mission-archive-button").click();
     await expect(bPage.locator("#mission-archive-overlay")).toBeVisible();
@@ -351,7 +377,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       "data-emblem",
       actorA.bootstrap.player.emblem,
     );
-    await expect(archiveCard).toContainText("1칸");
+    await expect(archiveCard).toContainText("1개");
     await bPage.screenshot({
       path: resolve(SCREENSHOT_DIRECTORY, "archive-mobile-844x390.png"),
       fullPage: true,
@@ -376,6 +402,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       deviceScaleFactor: 2,
       storageState: aReconnectState,
     });
+    configureContextTimeouts(reconnectedAContext);
     const reconnectedAPage = await reconnectedAContext.newPage();
     const reconnectedErrors = observePageErrors(reconnectedAPage);
     await openPlayableWorld(reconnectedAPage);
@@ -389,7 +416,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
       reconnectedAPage.locator(".mission-archive-card").filter({
         hasText: actorA.bootstrap.player.publicId,
       }),
-    ).toContainText("1칸");
+    ).toContainText("1개");
 
     const reconnectedBootstrap = await actorA.repository.bootstrapPlayer(WORLD_ID);
     expect(reconnectedBootstrap.baySlotIndex).toBe(
@@ -402,10 +429,7 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
 
     for (const [label, errors] of [
       ["A", aErrors],
-      ["B", bErrors],
-      ["portrait B", portraitErrors],
-      ["short portrait B", shortPortraitErrors],
-      ["compact portrait B", compactPortraitErrors],
+      ["B mobile", bErrors],
       ["desktop B", desktopErrors],
       ["reconnected A", reconnectedErrors],
     ] as const) {
@@ -417,6 +441,121 @@ test.describe("두 익명 사용자의 비동기 공동 월드", () => {
 
     await reconnectedAContext.close();
     await bContext.close();
+  });
+
+  test("자유 건축은 첫 30개와 설치·회수·재접속 상태를 유지한다", async ({
+    browser,
+  }) => {
+    await mkdir(SCREENSHOT_DIRECTORY, { recursive: true });
+    await waitForSupabaseReady(requiredAnonKey());
+    const actor = await createIdentityActor(requiredAnonKey());
+    const context = await createMobileContext(browser, actor.session);
+    const page = await context.newPage();
+    const errors = observePageErrors(page);
+
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('input[name="game-mode"][value="free"]'),
+    ).toBeChecked();
+    await page.locator("#start-button").click();
+    await expect(page.locator(".start-overlay")).toBeHidden();
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+
+    await aimMobileCameraAtGround(context, page);
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+    await expect(page.locator(".toast")).toContainText(
+      "시작 지점과 광장으로 가는 길은 비워 두고",
+    );
+
+    // 슬롯 0의 발판 위에서 대각선으로 이동하되, 고정 시간에 기대지 않고
+    // 실제 배치 가능 판정이 바뀌는 순간 입력을 놓아 CI 프레임 차이를 흡수한다.
+    await moveMobilePlayerUntilPlaceable(
+      context,
+      page,
+      { x: -0.25, y: -0.18 },
+      31,
+    );
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    const placed = await actor.repository.getFreeModeOverview(WORLD_ID);
+    expect(placed.progress.inventory).toBe(29);
+
+    await page.locator("#remove-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("30");
+    expect(
+      (await actor.repository.getFreeModeOverview(WORLD_ID)).progress.inventory,
+    ).toBe(30);
+
+    await page.locator("#place-button").click();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+
+    const [ownerIdentity, visitor] = await Promise.all([
+      actor.repository.getPlayerIdentity(WORLD_ID),
+      createIdentityActor(requiredAnonKey()),
+    ]);
+    await visitor.repository.getFreeModeOverview(WORLD_ID);
+    const spawn = createStarterBayLayout(0).safeSpawn;
+    const nearbyForVisitor = await visitor.repository.loadNearbyFreeModeBlocks({
+      worldId: WORLD_ID,
+      chunkX: Math.floor(spawn.x / 16),
+      chunkY: Math.floor(spawn.y / 16),
+      chunkZ: Math.floor(spawn.z / 16),
+      radius: 2,
+      verticalRadius: 1,
+    });
+    const sharedBlock = nearbyForVisitor.blocks.find(
+      ({ owner }) => owner.publicId === ownerIdentity.player.publicId,
+    );
+    expect(sharedBlock).toBeDefined();
+    await expect(
+      visitor.repository.commitFreeModeActions({
+        worldId: WORLD_ID,
+        idempotencyKey: crypto.randomUUID(),
+        actions: [{ type: "remove", blockId: sharedBlock!.id }],
+      }),
+    ).rejects.toMatchObject({ code: "P0004" });
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(
+      page.locator('input[name="game-mode"][value="free"]'),
+    ).toBeChecked();
+    await page.locator("#start-button").click();
+    await expect(page.locator(".start-overlay")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await assertMinimalMobileHud(page);
+    await assertMobileLayout(page);
+    await hideDevelopmentPerformanceHud(page);
+    await page.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "free-mode-mobile-844x390.png"),
+      fullPage: true,
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect
+      .poll(() =>
+        page.evaluate(() =>
+          window.matchMedia("(orientation: portrait)").matches,
+        ),
+      )
+      .toBe(true);
+    await page.waitForTimeout(100);
+    await expect(page.locator("#mission-panel")).toBeHidden();
+    await expect(page.locator("#build-inventory-count")).toHaveText("29");
+    await expect(page.locator("#world-panel-toggle")).toBeVisible();
+    await expect(page.locator("#analytics-settings-button")).toBeVisible();
+    await expect(page.locator(".build-tray")).toBeVisible();
+    await assertMinimalMobileHud(page);
+    await assertMobileLayout(page);
+    await page.screenshot({
+      path: resolve(SCREENSHOT_DIRECTORY, "free-mode-mobile-390x844.png"),
+      fullPage: true,
+    });
+
+    expect(errors).toEqual([]);
+    await context.close();
   });
 });
 
@@ -437,6 +576,25 @@ async function createActor(anonKey: string): Promise<Actor> {
     });
   }
   return { client, repository, bootstrap, session: data.session };
+}
+
+async function createIdentityActor(anonKey: string): Promise<IdentityActor> {
+  const client = createClient(SUPABASE_URL, anonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+  const repository = new SupabaseRepository(client, { worldId: WORLD_ID });
+  await repository.getPlayerIdentity(WORLD_ID);
+  const { data, error } = await client.auth.getSession();
+  if (error || !data.session) {
+    throw new Error("익명 사용자 세션을 가져오지 못했습니다.", {
+      cause: error ?? undefined,
+    });
+  }
+  return { repository, session: data.session };
 }
 
 async function createReadyActor(anonKey: string): Promise<Actor> {
@@ -509,6 +667,7 @@ async function createMobileContext(
     hasTouch: true,
     deviceScaleFactor: 2,
   });
+  configureContextTimeouts(context);
   await context.addInitScript(
     ({ authStorageKey, analyticsConsentKey, authSession }) => {
       localStorage.setItem(authStorageKey, JSON.stringify(authSession));
@@ -523,6 +682,11 @@ async function createMobileContext(
   return context;
 }
 
+function configureContextTimeouts(context: BrowserContext): void {
+  context.setDefaultTimeout(15_000);
+  context.setDefaultNavigationTimeout(30_000);
+}
+
 async function openPlayableWorld(
   page: Page,
   navigate = true,
@@ -530,10 +694,21 @@ async function openPlayableWorld(
   if (navigate) {
     await page.goto("/", { waitUntil: "domcontentloaded" });
   }
-  await expect(page.locator("#world-mode")).toHaveText("ONLINE WORLD · 01");
+  await expect(page.locator("#world-mode")).toHaveText("함께");
+  await page
+    .locator('.game-mode-choice:has(input[value="mission"])')
+    .click();
+  await expect(
+    page.locator('input[name="game-mode"][value="mission"]'),
+  ).toBeChecked();
   await expect(page.locator("#start-button")).toBeVisible();
   await page.locator("#start-button").click();
-  await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u);
+  // 온라인 미션 진입은 bootstrap/nearby/production/mission/archive 읽기를
+  // 순서대로 마친다. 일반 UI action의 15초 제한은 유지하되 이 권위 초기화
+  // 완료만 별도 상한을 둬 느린 CI를 click 실패로 오판하지 않는다.
+  await expect(page.locator(".start-overlay")).toHaveClass(/is-hidden/u, {
+    timeout: 45_000,
+  });
   await expect(page.locator(".start-overlay")).toBeHidden();
   await expect(page.locator("#mission-panel")).toBeVisible();
 }
@@ -566,7 +741,7 @@ async function verifyCreatorDiscovery(
   await expect(light).toBeVisible();
   await expect(light).toContainText(creator.player.nickname);
   await expect(light).toContainText(creator.player.publicId);
-  await expect(light).toContainText("1칸");
+  await expect(light).toContainText("1개");
   await expect(light.locator("[data-emblem]").first()).toHaveAttribute(
     "data-emblem",
     creator.player.emblem,
@@ -610,7 +785,7 @@ async function expectCreatorCard(
     creator.player.nickname,
   );
   await expect(page.locator("#owner-tooltip-date")).not.toHaveText(
-    "설치일 미상",
+    "놓은 날짜 정보 없음",
   );
   await expect(page.locator("#owner-tooltip-date")).toHaveAttribute(
     "datetime",
@@ -661,14 +836,17 @@ async function expectCreatorCard(
     await ownerMore.click();
   } else {
     const resume = page.locator("#pointer-resume-button");
-    if (await resume.isVisible()) {
-      await resume.click();
+    if (
+      await page.evaluate(
+        () => document.pointerLockElement?.id === "game-canvas",
+      )
+    ) {
+      await page.keyboard.press("Escape");
     }
     await expect
-      .poll(() =>
-        page.evaluate(() => document.pointerLockElement?.id ?? null),
-      )
-      .toBe("game-canvas");
+      .poll(() => page.evaluate(() => document.pointerLockElement === null))
+      .toBe(true);
+    await expect(resume).toBeVisible();
     await page.keyboard.press("KeyC");
     await expect
       .poll(() => page.evaluate(() => document.pointerLockElement === null))
@@ -915,6 +1093,28 @@ async function exerciseOrientationDisclosureReset(page: Page): Promise<void> {
   await assertMinimalMobileHud(page);
   await assertMobileLayout(page);
   await page.setViewportSize({ width: 844, height: 390 });
+}
+
+async function setMobileViewport(
+  page: Page,
+  width: number,
+  height: number,
+): Promise<void> {
+  await page.setViewportSize({ width, height });
+  await expect
+    .poll(() =>
+      page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        portrait: matchMedia("(orientation: portrait)").matches,
+      })),
+    )
+    .toEqual({ width, height, portrait: height > width });
+  await expect(page.locator("#fatal-overlay")).toBeHidden();
+  await expect(page.locator(".world-panel")).not.toHaveClass(/is-expanded/u);
+  await expect(page.locator("#mission-panel")).toHaveClass(/is-collapsed/u);
+  await expect(page.locator("#palette-row")).toBeHidden();
+  await expect(page.locator("#owner-card")).toBeHidden();
 }
 
 async function assertProfileStatusComposition(
@@ -1254,7 +1454,7 @@ async function assertContextLossRecovery(page: Page): Promise<void> {
   });
   await expect(page.locator("#fatal-overlay")).toBeVisible();
   await expect(page.locator("#fatal-title")).toHaveText(
-    "3D 화면 연결이 끊겼습니다",
+    "3D 화면이 멈췄어요",
   );
   await expect
     .poll(() => page.evaluate(() => document.pointerLockElement === null))
@@ -1275,8 +1475,7 @@ async function assertDesktopLayout(page: Page): Promise<void> {
   expect(result.bodyHeight).toBeLessThanOrEqual(result.viewportHeight + 1);
 }
 
-function observePageErrors(page: Page): string[] {
-  const errors: string[] = [];
+function observePageErrors(page: Page, errors: string[] = []): string[] {
   page.on("pageerror", (error) => errors.push(error.name));
   page.on("response", (response) => {
     if (response.status() >= 400) {
@@ -1416,6 +1615,85 @@ async function exerciseConcurrentMobileControls(
   expect(jumpDown?.defaultPrevented).toBe(true);
   expect(joystickMove?.pointerId).not.toBe(lookMove?.pointerId);
   expect(jumpDown?.joystickTransform).not.toBe("translate(0px, 0px)");
+}
+
+async function aimMobileCameraAtGround(
+  context: BrowserContext,
+  page: Page,
+): Promise<void> {
+  const look = await requiredBox(page, "#look-zone");
+  const start = {
+    x: look.x + look.width * 0.55,
+    y: look.y + look.height * 0.32,
+    id: 21,
+  };
+  const moved = { ...start, y: start.y + Math.min(140, look.height * 0.35) };
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [start],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [moved],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await page.waitForTimeout(100);
+  } finally {
+    await session.detach();
+  }
+}
+
+async function moveMobilePlayerUntilPlaceable(
+  context: BrowserContext,
+  page: Page,
+  direction: { x: number; y: number },
+  pointerId: number,
+): Promise<void> {
+  const joystick = await requiredBox(page, "#joystick");
+  const start = {
+    x: joystick.x + joystick.width / 2,
+    y: joystick.y + joystick.height / 2,
+    id: pointerId,
+  };
+  const moved = {
+    ...start,
+    x: start.x + joystick.width * direction.x,
+    y: start.y + joystick.height * direction.y,
+  };
+  const session = await context.newCDPSession(page);
+  try {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [start],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [moved],
+    });
+    await expect
+      .poll(() =>
+        page.locator("#joystick-knob").evaluate((element) => element.style.transform),
+      )
+      .not.toBe("translate(0px, 0px)");
+    await expect
+      .poll(() => page.locator("#action-hint").textContent(), {
+        timeout: 10_000,
+        intervals: [100, 100, 200, 200, 400],
+      })
+      .toContain("놓을 수 있어요");
+  } finally {
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+    await session.detach();
+  }
+  await page.waitForTimeout(100);
 }
 
 async function readPerformanceSnapshot(page: Page): Promise<{

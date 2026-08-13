@@ -26,7 +26,7 @@ function ownedBlock(
 }
 
 describe("로컬 월드 준비", () => {
-  it("1단계 저장본을 2단계로 한 번만 이관하고 최초 24블록과 베이 발판을 중복하지 않는다", () => {
+  it("이전 저장본을 최신 단계로 한 번만 이관하고 최초 24블록과 베이 발판을 중복하지 않는다", () => {
     const first = prepareLocalSnapshot(
       {
         schemaVersion: 1,
@@ -38,10 +38,11 @@ describe("로컬 월드 준비", () => {
     );
 
     expect(first.changed).toBe(true);
-    expect(first.snapshot.schemaVersion).toBe(2);
+    expect(first.snapshot.schemaVersion).toBe(3);
     expect(first.snapshot.localState?.progress.inventory).toBe(24);
     expect(first.snapshot.localState?.progress.initialGrantClaimed).toBe(true);
     expect(first.snapshot.blocks.length).toBeGreaterThan(0);
+    expect(first.snapshot.localFreeModeStates).toEqual([]);
 
     const second = prepareLocalSnapshot(first.snapshot, 2_000);
     expect(second.changed).toBe(false);

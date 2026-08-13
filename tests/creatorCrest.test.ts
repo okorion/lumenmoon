@@ -68,7 +68,7 @@ describe("결정적 제작자 문장", () => {
 
     expect(crest.icon).toBe("emblem-pentagon");
     expect(crest.emblemLabel).toBe("오각 문양");
-    expect(creatorCrestLabel(pentagon)).toContain("제작자 표식, 오각 문양");
+    expect(creatorCrestLabel(pentagon)).toContain("#A2B3의 오각 문양");
     expect(svg.match(/<svg\b/gu)).toHaveLength(1);
     expect(svg).not.toContain("<text");
     expect(svg).not.toContain("⬟");

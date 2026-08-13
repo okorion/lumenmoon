@@ -6,6 +6,12 @@ export default defineConfig({
   },
   build: {
     target: "es2022",
+    rolldownOptions: {
+      output: {
+        manualChunks: (id) =>
+          id.includes("/node_modules/three/") ? "three" : undefined,
+      },
+    },
   },
   test: {
     environment: "node",

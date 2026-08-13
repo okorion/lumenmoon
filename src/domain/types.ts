@@ -1,5 +1,6 @@
 import type { LocalPlayerProgress } from "./progression";
 import type { LocalMissionWorldState } from "./mission";
+import type { LocalFreeModeWorldState } from "./freeMode";
 
 export const CHUNK_SIZE = 16;
 export const WORLD_ID = "mvp-local-1";
@@ -7,7 +8,7 @@ export const WORLD_ID = "mvp-local-1";
 export type BlockKind = "cube" | "stair" | "light";
 export type ZoneKind = "system" | "personal" | "producer" | "public" | "mission";
 export type BlockRotation = 0 | 1 | 2 | 3;
-export type BlockSource = "onboarding" | "inventory";
+export type BlockSource = "onboarding" | "inventory" | "free";
 
 export interface GridPosition {
   x: number;
@@ -49,13 +50,17 @@ export interface LocalGameState {
 }
 
 export interface WorldSnapshot {
-  schemaVersion: 1 | 2;
+  schemaVersion: 1 | 2 | 3;
   worldId: string;
   blocks: VoxelBlock[];
   updatedAt: number;
   localState?: LocalGameState;
   /** 로컬 모드의 공동 미션 원본 슬롯·완료 기록·멱등 처리 상태. */
   localMissionState?: LocalMissionWorldState;
+  /** 로컬 자유 모드의 사용자별 재고·권위 시각·멱등 처리 상태. */
+  localFreeModeStates?: LocalFreeModeWorldState[];
+  /** 자유 모드의 공유 블록 집합과 재고 정산을 직렬화하는 월드 단위 CAS revision. */
+  localFreeModeRevision?: number;
 }
 
 export interface PaletteColor {

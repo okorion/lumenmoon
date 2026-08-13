@@ -21,6 +21,12 @@ import {
   cloneLocalMissionWorldState,
   createInitialLocalMissionWorldState,
 } from "../domain/mission";
+import {
+  DEFAULT_FREE_MODE_RULES,
+  cloneLocalFreeModeWorldState,
+  type FreeModeRulesConfig,
+  type LocalFreeModeWorldState,
+} from "../domain/freeMode";
 
 export interface PreparedLocalSnapshot {
   snapshot: WorldSnapshot;
@@ -31,6 +37,7 @@ export function prepareLocalSnapshot(
   source: WorldSnapshot,
   now: number,
   config: Readonly<GameRulesConfig> = DEFAULT_GAME_RULES,
+  freeModeConfig: Readonly<FreeModeRulesConfig> = DEFAULT_FREE_MODE_RULES,
 ): PreparedLocalSnapshot {
   const existingSlot = source.localState?.baySlotIndex;
   const baySlotIndex =
@@ -90,21 +97,36 @@ export function prepareLocalSnapshot(
     withoutLegacyMissionSamples.filter(isDeterministicSystemBlock),
     blocks.filter(isDeterministicSystemBlock),
   );
+  const localFreeModeStates = normalizeLocalFreeModeStates(
+    source.localFreeModeStates,
+    freeModeConfig,
+  );
+  const freeModeStateChanged =
+    JSON.stringify(localFreeModeStates) !==
+    JSON.stringify(source.localFreeModeStates ?? null);
+  const localFreeModeRevision = normalizeLocalFreeModeRevision(
+    source.localFreeModeRevision,
+    localFreeModeStates,
+  );
+  const freeModeRevisionChanged =
+    source.localFreeModeRevision !== localFreeModeRevision;
 
   const changed =
-    source.schemaVersion !== 2 ||
+    source.schemaVersion !== 3 ||
     source.localState === undefined ||
     source.localState?.playerId !== LOCAL_PLAYER.id ||
     source.localState?.baySlotIndex !== baySlotIndex ||
     progress !== existingProgress ||
     generatedSystemBlocksChanged ||
     removedLegacyMissionSamples ||
-    source.localMissionState === undefined;
+    source.localMissionState === undefined ||
+    freeModeStateChanged ||
+    freeModeRevisionChanged;
 
   return {
     changed,
     snapshot: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       worldId: source.worldId,
       blocks,
       updatedAt: changed ? now : source.updatedAt,
@@ -112,6 +134,8 @@ export function prepareLocalSnapshot(
       localMissionState: source.localMissionState
         ? cloneLocalMissionWorldState(source.localMissionState)
         : createInitialLocalMissionWorldState(source.worldId, now),
+      localFreeModeStates,
+      localFreeModeRevision,
     },
   };
 }
@@ -211,4 +235,87 @@ function isTimestamp(value: unknown): value is number {
 
 function isTimestampOrNull(value: unknown): value is number | null {
   return value === null || isTimestamp(value);
+}
+
+function normalizeLocalFreeModeStates(
+  value: unknown,
+  config: Readonly<FreeModeRulesConfig>,
+): LocalFreeModeWorldState[] {
+  if (!Array.isArray(value)) return [];
+  const normalized = new Map<string, LocalFreeModeWorldState>();
+  for (const candidate of value) {
+    if (!isValidLocalFreeModeState(candidate, config)) continue;
+    const cloned = cloneLocalFreeModeWorldState(candidate);
+    cloned.revision ??= 0;
+    const current = normalized.get(cloned.playerId);
+    const clonedRevision = cloned.revision ?? 0;
+    const currentRevision = current?.revision ?? 0;
+    const isFresher =
+      !current ||
+      clonedRevision > currentRevision ||
+      (clonedRevision === currentRevision &&
+        (cloned.updatedAt > current.updatedAt ||
+          (cloned.updatedAt === current.updatedAt &&
+            cloned.operations.length > current.operations.length)));
+    if (isFresher) {
+      normalized.set(cloned.playerId, cloned);
+    }
+  }
+  return [...normalized.values()];
+}
+
+function normalizeLocalFreeModeRevision(
+  value: unknown,
+  states: readonly LocalFreeModeWorldState[],
+): number {
+  const stateRevision = states.reduce(
+    (highest, state) => Math.max(highest, state.revision ?? 0),
+    0,
+  );
+  if (Number.isSafeInteger(value) && (value as number) >= 0) {
+    return Math.max(value as number, stateRevision);
+  }
+  return stateRevision;
+}
+
+function isValidLocalFreeModeState(
+  value: unknown,
+  config: Readonly<FreeModeRulesConfig>,
+): value is LocalFreeModeWorldState {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<LocalFreeModeWorldState>;
+  const progress = candidate.progress;
+  return (
+    typeof candidate.playerId === "string" &&
+    candidate.playerId.length > 0 &&
+    typeof progress === "object" &&
+    progress !== null &&
+    typeof progress.initialGrantClaimed === "boolean" &&
+    Number.isSafeInteger(progress.inventory) &&
+    progress.inventory >= 0 &&
+    progress.inventory <= config.maxInventory &&
+    isTimestamp(progress.lastSettledAt) &&
+    Array.isArray(candidate.operations) &&
+    candidate.operations.every(
+      (operation) =>
+        typeof operation === "object" &&
+        operation !== null &&
+        typeof operation.idempotencyKey === "string" &&
+        typeof operation.fingerprint === "string" &&
+        Array.isArray(operation.upsertedBlocks) &&
+        Array.isArray(operation.removedBlockIds) &&
+        operation.removedBlockIds.every((id) => typeof id === "string") &&
+        typeof operation.progress === "object" &&
+        operation.progress !== null &&
+        typeof operation.progress.initialGrantClaimed === "boolean" &&
+        Number.isSafeInteger(operation.progress.inventory) &&
+        operation.progress.inventory >= 0 &&
+        operation.progress.inventory <= config.maxInventory &&
+        isTimestamp(operation.progress.lastSettledAt) &&
+        isTimestamp(operation.serverNow),
+    ) &&
+    isTimestamp(candidate.updatedAt) &&
+    (candidate.revision === undefined ||
+      (Number.isSafeInteger(candidate.revision) && candidate.revision >= 0))
+  );
 }

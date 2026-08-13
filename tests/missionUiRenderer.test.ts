@@ -70,11 +70,11 @@ describe("공동 미션 UI·렌더 표현", () => {
   it("구조 단계 문구와 5% 단위 발광이 각각 점증한다", () => {
     const stages = [0, 25, 50, 75, 100] as const;
     expect(stages.map(missionStageLabel)).toEqual([
-      "별빛 모으는 중",
-      "바닥 문양 점등",
-      "좌우 기둥 활성화",
-      "상단 고리 · 빛줄기",
-      "불변 기념물 완성",
+      "관문 만드는 중",
+      "바닥의 빛",
+      "양쪽 기둥",
+      "고리와 빛줄기",
+      "관문 완성",
     ]);
     expect(stages.map(missionEmissiveIntensity)).toEqual(
       [...stages.map(missionEmissiveIntensity)].sort((left, right) => left - right),

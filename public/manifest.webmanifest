@@ -1,15 +1,15 @@
 {
   "id": "/",
-  "name": "루멘문 · 비동기 공동 복셀 월드",
+  "name": "루멘문",
   "short_name": "루멘문",
-  "description": "이전 플레이어의 블록을 발견하고 내 거점과 별빛 관문을 이어 만드는 1인칭 비동기 공동 복셀 건축 게임",
+  "description": "블록 30개로 자유롭게 건축하거나 다른 사람과 별빛 관문을 완성하는 1인칭 복셀 건축 게임",
   "lang": "ko-KR",
   "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
   "display_override": ["fullscreen", "standalone"],
-  "orientation": "landscape-primary",
+  "orientation": "any",
   "background_color": "#0c1222",
   "theme_color": "#101a2c",
   "categories": ["games", "entertainment"],
@@ -45,14 +45,21 @@
       "sizes": "1280x800",
       "type": "image/jpeg",
       "form_factor": "wide",
-      "label": "루멘문 데스크톱 공동 건축 화면"
+      "label": "루멘문 밤하늘 월드의 데스크톱 화면"
     },
     {
       "src": "/screenshots/lumenmoon-mobile.jpg",
       "sizes": "390x844",
       "type": "image/jpeg",
       "form_factor": "narrow",
-      "label": "루멘문 모바일 공동 건축 화면"
+      "label": "루멘문 자유 건축 모바일 화면"
+    },
+    {
+      "src": "/screenshots/lumenmoon-sound-settings.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "루멘문 사운드 설정 화면"
     }
   ]
 }

@@ -1,7 +1,7 @@
 {
   "measurement": "Playwright headless Edge WebGL2 on the Vite development server; not a physical-device FPS benchmark",
   "desktop": {
-    "framesPerSecond": 112.09979101337326,
+    "framesPerSecond": 159.00252309078732,
     "drawCalls": 22,
     "triangles": 5062,
     "visibleBlockCount": 786,
@@ -21,7 +21,7 @@
     }
   },
   "mobile": {
-    "framesPerSecond": 135.44730564769637,
+    "framesPerSecond": 102.2067500120651,
     "drawCalls": 20,
     "triangles": 4428,
     "visibleBlockCount": 733,
