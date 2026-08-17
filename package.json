@@ -18,6 +18,7 @@
     "type": "git",
     "url": "git+https://github.com/okorion/lumenmoon.git"
   },
+  "license": "MIT",
   "private": true,
   "version": "0.2.0",
   "engines": {
