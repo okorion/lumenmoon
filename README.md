@@ -165,7 +165,7 @@ npm run test:db:client
 npm run test:e2e:online
 ```
 
-프로덕션 정적 파일은 `dist/`에 생성됩니다. 현재 데모는 [Vercel](https://lumenmoon.vercel.app/)에서 제공하며 GitHub 저장소는 private 상태를 유지할 수 있습니다.
+프로덕션 정적 파일은 `dist/`에 생성됩니다. 현재 공개 데모는 [lumenmoon.vercel.app](https://lumenmoon.vercel.app/)에서 바로 플레이할 수 있으며, 이 저장소에서 소스 코드와 검증 절차를 함께 공개합니다.
 
 GitHub Actions의 Vercel 자동 배포는 저장소 변수 `ENABLE_VERCEL_DEPLOY=true`일 때만 실행됩니다. 이때 `VERCEL_TOKEN`, `VERCEL_SCOPE`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` secret 중 하나라도 비어 있으면 누락된 이름만 표시하고 배포 전에 실패합니다. 플래그가 없거나 `false`이면 CI 검증만 수행하고 배포 job은 건너뜁니다.
 
@@ -214,6 +214,14 @@ docs/            게임 계약, 분석, 로컬 Supabase 문서
 - 24시간이 지난 작업 키는 정리될 수 있으므로 오래된 요청을 새로 보내면 현재 월드 상태로 다시 검증됩니다.
 - 실제 기종별 장시간 FPS와 8,192블록에 가까운 밀집 월드는 추가 현장 측정이 필요합니다.
 - 전투, NPC, 채팅, 실시간 플레이어, 거래, 랭킹과 결제는 MVP 범위 밖입니다.
+
+## 기여와 보안
+
+버그 제보와 변경 제안은 [기여 가이드](CONTRIBUTING.md)를 따라 주세요. 보안 취약점은 공개 이슈에 세부 내용을 남기지 말고 [보안 정책](SECURITY.md)의 비공개 제보 경로를 이용해 주세요.
+
+## 라이선스
+
+이 저장소의 소스 코드와 프로젝트 자산은 [MIT License](LICENSE)로 공개합니다.
 
 ---
 
