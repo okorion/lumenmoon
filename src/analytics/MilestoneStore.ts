@@ -1,6 +1,7 @@
 import type { AnalyticsMilestone } from "./types";
 
 const DATABASE_NAME = "lumenmoon-analytics";
+const LEGACY_DATABASE_NAME = ["one", "more", "block", "analytics"].join("-");
 const DATABASE_VERSION = 1;
 const STORE_NAME = "lifecycle";
 const STATE_KEY = "device";
@@ -117,7 +118,7 @@ export class IndexedDbAnalyticsMilestoneStore
     if (this.databasePromise) {
       return this.databasePromise;
     }
-    this.databasePromise = new Promise((resolve, reject) => {
+    const databasePromise = new Promise<IDBDatabase>((resolve, reject) => {
       const request = this.factory.open(DATABASE_NAME, DATABASE_VERSION);
       request.onupgradeneeded = () => {
         if (!request.result.objectStoreNames.contains(STORE_NAME)) {
@@ -127,9 +128,111 @@ export class IndexedDbAnalyticsMilestoneStore
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error ?? new Error("analytics_db_open"));
       request.onblocked = () => reject(new Error("analytics_db_blocked"));
+    }).then(async (database) => {
+      try {
+        await migrateLegacyState(this.factory, database);
+        return database;
+      } catch (error) {
+        database.close();
+        throw error;
+      }
     });
-    return this.databasePromise;
+    this.databasePromise = databasePromise;
+    return databasePromise;
   }
+}
+
+async function migrateLegacyState(
+  factory: IDBFactory,
+  database: IDBDatabase,
+): Promise<void> {
+  const currentTransaction = database.transaction(STORE_NAME, "readonly");
+  const currentState = await requestResult<AnalyticsLifecycleState | undefined>(
+    currentTransaction.objectStore(STORE_NAME).get(STATE_KEY),
+  );
+  await transactionDone(currentTransaction);
+  if (currentState !== undefined) {
+    return;
+  }
+
+  const legacyState = await readLegacyState(factory);
+  if (!legacyState) {
+    return;
+  }
+
+  const transaction = database.transaction(STORE_NAME, "readwrite");
+  const store = transaction.objectStore(STORE_NAME);
+  const latestState = await requestResult<AnalyticsLifecycleState | undefined>(
+    store.get(STATE_KEY),
+  );
+  if (latestState === undefined) {
+    store.put(legacyState, STATE_KEY);
+  }
+  await transactionDone(transaction);
+}
+
+async function readLegacyState(
+  factory: IDBFactory,
+): Promise<AnalyticsLifecycleState | undefined> {
+  let createdForProbe = false;
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open(LEGACY_DATABASE_NAME);
+    request.onupgradeneeded = (event) => {
+      createdForProbe = event.oldVersion === 0;
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () =>
+      reject(request.error ?? new Error("analytics_legacy_db_open"));
+    request.onblocked = () => reject(new Error("analytics_legacy_db_blocked"));
+  });
+
+  if (createdForProbe) {
+    database.close();
+    await deleteDatabase(factory, LEGACY_DATABASE_NAME);
+    return undefined;
+  }
+  if (!database.objectStoreNames.contains(STORE_NAME)) {
+    database.close();
+    return undefined;
+  }
+
+  try {
+    const transaction = database.transaction(STORE_NAME, "readonly");
+    const state = await requestResult<unknown>(
+      transaction.objectStore(STORE_NAME).get(STATE_KEY),
+    );
+    await transactionDone(transaction);
+    return isAnalyticsLifecycleState(state)
+      ? structuredClone(state)
+      : undefined;
+  } finally {
+    database.close();
+  }
+}
+
+function deleteDatabase(factory: IDBFactory, name: string): Promise<void> {
+  return new Promise((resolve) => {
+    const request = factory.deleteDatabase(name);
+    request.onsuccess = () => resolve();
+    request.onerror = () => resolve();
+    request.onblocked = () => resolve();
+  });
+}
+
+function isAnalyticsLifecycleState(
+  value: unknown,
+): value is AnalyticsLifecycleState {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const state = value as Partial<AnalyticsLifecycleState>;
+  return (
+    (state.firstSessionAt === null ||
+      (typeof state.firstSessionAt === "number" &&
+        Number.isFinite(state.firstSessionAt))) &&
+    typeof state.milestones === "object" &&
+    state.milestones !== null
+  );
 }
 
 function createEmptyState(): AnalyticsLifecycleState {

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = public, private, extensions, pg_catalog;
 
-select plan(56);
+select plan(57);
 
 select ok(to_regclass('public.mission_templates') is not null, 'mission templates table exists');
 select ok(to_regclass('public.mission_template_slots') is not null, 'mission template slots table exists');
@@ -54,6 +54,13 @@ select is(
     where template_id = '60000000-0000-4000-8000-000000000001'),
   24,
   'starlight gate has exactly 24 canonical server slots'
+);
+select is(
+  (select name
+     from public.mission_templates
+    where id = '60000000-0000-4000-8000-000000000001'),
+  '별빛 관문',
+  'existing starlight gate templates use the current product name'
 );
 select throws_ok(
   $$insert into public.mission_templates (
