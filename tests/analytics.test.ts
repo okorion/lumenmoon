@@ -1,4 +1,4 @@
-import { indexedDB } from "fake-indexeddb";
+import { IDBFactory, indexedDB } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
 import {
   AnalyticsConsentController,
@@ -441,6 +441,30 @@ describe("session delta analytics", () => {
     expect((await store.read()).milestones.first_block).toBeDefined();
   });
 
+  it("이전 브랜드의 IndexedDB 생애 기록을 현재 저장소로 한 번만 이관한다", async () => {
+    const factory = new IDBFactory();
+    const legacyDatabaseName = ["one", "more", "block", "analytics"].join("-");
+    await writeLifecycleState(factory, legacyDatabaseName, {
+      firstSessionAt: 1_000,
+      milestones: { first_move: 2_000 },
+    });
+
+    const store = new IndexedDbAnalyticsMilestoneStore(factory);
+
+    await expect(store.ensureFirstSession(3_000)).resolves.toEqual({
+      firstSessionAt: 1_000,
+      firstVisit: false,
+    });
+    await expect(store.markMilestone("first_move", 4_000)).resolves.toEqual({
+      firstSessionAt: 1_000,
+      firstReached: false,
+    });
+    await expect(store.read()).resolves.toEqual({
+      firstSessionAt: 1_000,
+      milestones: { first_move: 2_000 },
+    });
+  });
+
   it("같은 생애 마일스톤 이벤트를 두 번 전송하지 않는다", async () => {
     const analytics = new MemoryAnalytics();
     const tracker = new SessionAnalytics({
@@ -565,3 +589,29 @@ describe("session delta analytics", () => {
     });
   });
 });
+
+async function writeLifecycleState(
+  factory: IDBFactory,
+  databaseName: string,
+  state: {
+    firstSessionAt: number | null;
+    milestones: Record<string, number>;
+  },
+): Promise<void> {
+  const database = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open(databaseName, 1);
+    request.onupgradeneeded = () => {
+      request.result.createObjectStore("lifecycle");
+    };
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  const transaction = database.transaction("lifecycle", "readwrite");
+  transaction.objectStore("lifecycle").put(state, "device");
+  await new Promise<void>((resolve, reject) => {
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error);
+    transaction.onabort = () => reject(transaction.error);
+  });
+  database.close();
+}

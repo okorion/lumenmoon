@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AnalyticsConsentChoice } from "../src/analytics/types";
 import {
@@ -28,5 +30,16 @@ describe("복구 UI Pointer Lock", () => {
     releasePointerLockForDialog();
 
     expect(exitPointerLock).toHaveBeenCalledOnce();
+  });
+
+  it("치명 오류 화면을 다른 모달보다 우선해 재시도 버튼을 활성화한다", async () => {
+    const ui = await readFile(join(process.cwd(), "src/ui/GameUI.ts"), "utf8");
+
+    expect(ui).toMatch(
+      /private get activeDialog\(\): HTMLElement \| null \{\s*if \(!this\.fatalOverlay\.hidden\) return this\.fatalOverlay;/u,
+    );
+    expect(ui).toMatch(
+      /this\.fatalOverlay\.hidden = false;\s*this\.syncExclusiveSurface\(\);/u,
+    );
   });
 });
